@@ -1,0 +1,28 @@
+
+1 VERSIONINFO
+FILEVERSION 1,0,2,0
+PRODUCTVERSION 1,0,2,0
+FILEOS 0x4
+FILETYPE 0x1
+{
+BLOCK "StringFileInfo"
+{
+	BLOCK "040904b0"
+	{
+		VALUE "Comments", ""
+		VALUE "CompanyName", "Nizikawa"
+		VALUE "FileDescription", "wkTerrain with automatic data synchronization and extra customization"
+		VALUE "FileVersion", "1.0.2.0"
+		VALUE "InternalName", "wkTerrainSync v1.0.2"
+		VALUE "LegalCopyright", "Nizikawa"
+		VALUE "OriginalFilename", "wkTerrainSync.dll"
+		VALUE "ProductName", "wkTerrainSync v1.0.2"
+		VALUE "ProductVersion", "1.0.2.0"
+	}
+}
+
+BLOCK "VarFileInfo"
+{
+	VALUE "Translation", 0x0409 0x04B0  
+}
+}
