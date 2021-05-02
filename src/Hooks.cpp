@@ -3,9 +3,11 @@
 #include <PatternScanner.h>
 #include "Hooks.h"
 #include <fstream>
+#include <polyhook2/CapstoneDisassembler.hpp>
 
 
-MH_STATUS Hooks::minhook(std::string name, DWORD pTarget, DWORD *pDetour, DWORD *ppOriginal) {
+void Hooks::hook(std::string name, DWORD pTarget, DWORD *pDetour, DWORD *ppOriginal) {
+	static PLH::CapstoneDisassembler dis(PLH::Mode::x86);
 	if(!pTarget)
 		throw std::runtime_error("Hook adress is null: " + name);
 	if(hookNameToAddr.find(name) != hookNameToAddr.end())
@@ -16,24 +18,17 @@ MH_STATUS Hooks::minhook(std::string name, DWORD pTarget, DWORD *pDetour, DWORD 
 		throw std::runtime_error(ss.str());
 	}
 
-	if(MH_CreateHook((LPVOID)pTarget, (LPVOID)pDetour, (LPVOID*)ppOriginal) != MH_OK)
+	uint64_t trampoline = 0;
+	auto detour = std::make_unique<PLH::x86Detour>(pTarget, (const uint64_t)pDetour, &trampoline, dis);
+	if(!detour->hook()) {
 		throw std::runtime_error("Failed to create hook: " + name);
-	if(MH_EnableHook((LPVOID)pTarget) != MH_OK)
-		throw std::runtime_error("Failed to enable hook: " + name);
+	}
+	detours.push_back(std::move(detour));
+	*ppOriginal = (DWORD)trampoline;
 
 	hookAddrToName[pTarget] = name;
 	hookNameToAddr[name] = pTarget;
-	printf("minhook: %s 0x%X -> 0x%X\n", name.c_str(), pTarget, pDetour);
-	return MH_OK;
-}
-
-void Hooks::hookApi(std::string name, LPCWSTR pszModule, LPCSTR pszProcName, DWORD *pDetour, DWORD *ppOriginal) {
-	LPVOID hook;
-	if(MH_CreateHookApiEx(pszModule, pszProcName, (LPVOID)pDetour, (LPVOID*)ppOriginal, &hook) != MH_OK)
-		throw std::runtime_error("Failed to create API hook: " + name);
-	if(MH_EnableHook(hook) != MH_OK)
-		throw std::runtime_error("Failed to enable API hook: " + name);
-	printf("minhook API: %s -> 0x%X\n", name.c_str(), (DWORD)pDetour);
+	printf("hook: %s 0x%X -> 0x%X\n", name.c_str(), pTarget, pDetour);
 }
 
 //Worms development tools by StepS

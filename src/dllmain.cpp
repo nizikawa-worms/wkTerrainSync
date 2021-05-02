@@ -1,6 +1,6 @@
-#include <Windows.h>
+#include <windows.h>
 #include <string>
-#include <MinHook.h>
+
 #include <stdexcept>
 #include <ctime>
 
@@ -16,10 +16,10 @@
 #include "BitmapImage.h"
 #include "W2App.h"
 #include "Sprites.h"
+#include "MapGenerator.h"
+#include "FrontendDialogs.h"
 
 void install() {
-	if (MH_Initialize() != MH_OK)
-		throw std::runtime_error("Failed to initialize Minhook");
 	srand(time(0) * GetCurrentProcessId());
 	WaLibc::install();
 	TerrainList::install();
@@ -31,6 +31,9 @@ void install() {
 	BitmapImage::install();
 	W2App::install();
 	Sprites::install();
+	MapGenerator::install();
+	FrontendDialogs::install();
+
 	TerrainList::rescanTerrains();
 }
 

@@ -4,6 +4,8 @@
 #include "Config.h"
 #include "Sprites.h"
 #include "LobbyChat.h"
+#include "FrontendDialogs.h"
+#include "MapGenerator.h"
 
 DWORD origInitializeW2App;
 DWORD __stdcall W2App::hookInitializeW2App(DWORD DD_Game_a2, DWORD DD_Display_a3, DWORD DS_Sound_a4, DWORD DD_Keyboard_a5, DWORD DD_Mouse_a6, DWORD WAV_CDrom_a7, DWORD WS_GameNet_a8) {
@@ -19,7 +21,9 @@ DWORD __stdcall W2App::hookInitializeW2App(DWORD DD_Game_a2, DWORD DD_Display_a3
 	addrWSGameNet = WS_GameNet_a8;
 	addrW2Wrapper = DD_W2Wrapper;
 
-	LobbyChat::resetLobbyScreenPtrs();
+//	LobbyChat::resetLobbyScreenPtrs();
+//	FrontendDialogs::destroyTerrainSizeComboBoxes();
+//	MapGenerator::resetMapThumbnailPtr();
 
 	_asm push WS_GameNet_a8
 	_asm push WAV_CDrom_a7
@@ -53,6 +57,7 @@ DWORD (__fastcall *origDestroyGameGlobal)(int This, int EDX);
 DWORD __fastcall W2App::hookDestroyGameGlobal(int This, int EDX) {
 	auto ret = origDestroyGameGlobal(This, EDX);
 	addrDDDisplay = addrDSSound = addrDDKeyboard = addrDDMouse = addrWavCDRom = addrWSGameNet = addrDDGame = 0;
+	MapGenerator::resetScale(false);
 	return ret;
 }
 
@@ -65,9 +70,9 @@ void W2App::install() {
 	DWORD addrReferencesGameinfo =  Hooks::scanPattern("ReferencesGameinfo", "\x80\x3D\x00\x00\x00\x00\x00\x75\x15\x56\x8B\x35\x00\x00\x00\x00\x6A\x01\xFF\xD6\x80\x3D\x00\x00\x00\x00\x00\x74\xF3\x5E\x8B\x44\x24\x04\x50\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00\xC2\x04\x00", "???????xxxxx????xxxxxx?????xxxxxxxxx????x????xxx");
 	addrGameinfoObject =  *(DWORD*)(addrReferencesGameinfo + 0x24);
 
-	Hooks::minhook("InitializeW2App", addrInitializeW2App, (DWORD*)&hookInitializeW2App, (DWORD*)&origInitializeW2App);
-	Hooks::minhook("ConstructGameGlobal", addrConstructGameGlobal, (DWORD*)&hookConstructGameGlobal, (DWORD*)&origConstructGameGlobal);
-	Hooks::minhook("DestroyGameGlobal", addrDestroyGameGlobal, (DWORD*)&hookDestroyGameGlobal, (DWORD*)&origDestroyGameGlobal);
+	Hooks::hook("InitializeW2App", addrInitializeW2App, (DWORD *) &hookInitializeW2App, (DWORD *) &origInitializeW2App);
+	Hooks::hook("ConstructGameGlobal", addrConstructGameGlobal, (DWORD *) &hookConstructGameGlobal, (DWORD *) &origConstructGameGlobal);
+	Hooks::hook("DestroyGameGlobal", addrDestroyGameGlobal, (DWORD *) &hookDestroyGameGlobal, (DWORD *) &origDestroyGameGlobal);
 }
 
 DWORD W2App::getAddrDdGame() {

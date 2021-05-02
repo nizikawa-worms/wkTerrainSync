@@ -3,8 +3,9 @@
 
 
 #include <map>
-#include <MinHook.h>
 #include <string>
+#include <vector>
+#include <polyhook2/Detour/x86Detour.hpp>
 
 class Hooks {
 private:
@@ -13,7 +14,7 @@ private:
 
 	static inline std::map<std::string, DWORD> scanNameToAddr;
 	static inline std::map<DWORD, std::string> scanAddrToName;
-	static inline bool scanFoundNew = false;
+	static inline std::vector<std::unique_ptr<PLH::x86Detour>> detours;
 
 	//Worms development tools by StepS
 	template<typename VT>
@@ -24,8 +25,7 @@ private:
 	static BOOL PatchMemData(PVOID pAddr, size_t buf_len, PVOID pNewData, size_t data_len);
 	static BOOL InsertJump(PVOID pDest, size_t dwPatchSize, PVOID pCallee, DWORD dwJumpType);
 public:
-	static MH_STATUS minhook(std::string name, DWORD pTarget, DWORD *pDetour, DWORD *ppOriginal);
-	static void hookApi(std::string name, LPCWSTR pszModule, LPCSTR pszProcName, DWORD *pDetour, DWORD *ppOriginal);
+	static void hook(std::string name, DWORD pTarget, DWORD *pDetour, DWORD *ppOriginal);
 
 	static void hookAsm(DWORD startAddr, DWORD hookAddr);
 	static void hookVtable(const char * classname, int offset, DWORD addr, DWORD hookAddr, DWORD * original);

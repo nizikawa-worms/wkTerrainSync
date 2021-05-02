@@ -6,6 +6,7 @@
 #include "W2App.h"
 #include "WaLibc.h"
 #include "TerrainList.h"
+#include "MapGenerator.h"
 
 DWORD (__fastcall *origLoadSpriteFromVFS)(DWORD DDdisplay, DWORD EDX, int palette_num_a2, int index_a3, int a4, int vfs_a5, char *filename_a6);
 
@@ -102,14 +103,16 @@ int __fastcall Sprites::hookDrawBackSprite(int *a1, int a2, int a3, int a4, int 
 		la8 = a8;
 	}
 	if(sprite_a7 == 0x1026D) {
-		static int backA = Config::getParallaxBackA();
-		static int backB = Config::getParallaxBackB();
-//		origDrawBackSprite(a1, a2*2.75, a3 + 1, la4, a5*1.125 , 3, 0x10000 | back2SprId, la8);
-		origDrawBackSprite(a1, backA, a3 + 1, la4, backB , 3, 0x10000 | back2SprId, la8);
-
-		static int frontA = Config::getParallaxFrontA();
-		static int frontB = Config::getParallaxFrontB();
-		origDrawBackSprite(a1, frontA, 0x1A000, 0, frontB, 1, 0x10000 | frontSprId, la8);
+		static int hide = Config::getParallaxHideOnBigMaps(); // todo: scale parallax params
+		if(MapGenerator::getScaleYIncrements() == 0 || !hide) {
+			static int backA = Config::getParallaxBackA();
+			static int backB = Config::getParallaxBackB();
+//			origDrawBackSprite(a1, a2*2.75, a3 + 1, la4, a5*1.125 , 3, 0x10000 | back2SprId, la8);
+			origDrawBackSprite(a1, backA, a3 + 1, la4, backB, 3, 0x10000 | back2SprId, la8);
+			static int frontA = Config::getParallaxFrontA();
+			static int frontB = Config::getParallaxFrontB();
+			origDrawBackSprite(a1, frontA, 0x1A000, 0, frontB, 1, 0x10000 | frontSprId, la8);
+		}
 	}
 	return ret;
 }
@@ -135,9 +138,9 @@ int Sprites::install() {
 	DWORD addrLoadSpriteFromVFS = Hooks::scanPattern("LoadSpriteFromVFS", "\x55\x8B\x6C\x24\x0C\xF7\xC5\x00\x00\x00\x00\x56\x8B\xF1\x74\x0A\x5E\xB8\x00\x00\x00\x00\x5D\xC2\x14\x00\x53\x8B\x5C\x24\x10\x8D\x43\xFF\x83\xF8\x02\x0F\x87\x00\x00\x00\x00\x83\xBC\x9E\x00\x00\x00\x00\x00\x0F\x84\x00\x00\x00\x00", "??????x????xxxxxxx????xxxxxxxxxxxxxxxxx????xxx?????xx????");
 	addrCheckIfFileExistsInVFS = Hooks::scanPattern("CheckIfFileExistsInVFS", "\x53\x55\x8B\x6C\x24\x0C\x56\x57\x8B\xF0\x8D\x9B\x00\x00\x00\x00\x56\x68\x00\x00\x00\x00\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x6A\x7C\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00", "??????xxxxxx????xx????x????x????xxx????x????");
 
-	Hooks::minhook("LoadSpriteFromTerrain", addrLoadSpriteFromTerrain, (DWORD*) &hookLoadSpriteFromTerrain, (DWORD*)&origLoadSpriteFromTerrain);
-	Hooks::minhook("DrawBackSprite", addrDrawBackSprite, (DWORD*)&hookDrawBackSprite, (DWORD*)&origDrawBackSprite);
-	Hooks::minhook("LoadSpriteFromVFS", (DWORD)addrLoadSpriteFromVFS, (DWORD*)&hookLoadSpriteFromVFS, (DWORD*)&origLoadSpriteFromVFS);
+	Hooks::hook("LoadSpriteFromTerrain", addrLoadSpriteFromTerrain, (DWORD *) &hookLoadSpriteFromTerrain, (DWORD *) &origLoadSpriteFromTerrain);
+	Hooks::hook("DrawBackSprite", addrDrawBackSprite, (DWORD *) &hookDrawBackSprite, (DWORD *) &origDrawBackSprite);
+	Hooks::hook("LoadSpriteFromVFS", (DWORD) addrLoadSpriteFromVFS, (DWORD *) &hookLoadSpriteFromVFS, (DWORD *) &origLoadSpriteFromVFS);
 	return 0;
 }
 

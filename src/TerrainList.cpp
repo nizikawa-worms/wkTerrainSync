@@ -13,6 +13,7 @@
 #include "Packets.h"
 #include "LobbyChat.h"
 #include "Config.h"
+#include "MapGenerator.h"
 
 char *(__stdcall *getDataPath)(char **buffer);
 
@@ -35,6 +36,12 @@ DWORD __stdcall TerrainList::hookTerrain0(int a1, char *a2, char a3) {
 	int maxId = maxTerrain;
 	if(Packets::isHost() || (!Packets::isClient()))
 		maxId = terrainList.size();
+
+	auto mtype = (DWORD*)(a1 + 1364);
+	if(*mtype == 0) {
+		return 0;
+	}
+
 	if((unsigned int)(v32 + 2) <= 3) {
 		int terrainId = *(DWORD *) (a1 + 1320);
 		if (Packets::isClient() && (terrainId > maxTerrain && terrainId != 0xFF)) {
@@ -43,7 +50,6 @@ DWORD __stdcall TerrainList::hookTerrain0(int a1, char *a2, char a3) {
 			LobbyChat::lobbyPrint(buff);
 		}
 	}
-
 	return (unsigned int)(v32 + 2) <= 3
 		   && (*(DWORD *)(a1 + 1320) <= maxId || (*(DWORD *)(a1 + 1320) == 0xFF && !lastTerrainInfo.hash.empty() ))
 		   && *(DWORD *)(a1 + 1352) <= 0x12Cu
@@ -95,22 +101,32 @@ void __stdcall TerrainList::hookWriteMapThumbnail(int a1) {
 		int oldTerrain = *terrainId;
 		int newTerrain = rand() % terrainList.size();
 
-		if(GetAsyncKeyState(VK_CONTROL) && !customTerrains.empty())
+		if((GetAsyncKeyState(VK_CONTROL) & 0x8000) && !customTerrains.empty())
 			newTerrain = maxTerrain + 1 +( rand() % (customTerrains.size()));
-		else if(GetAsyncKeyState(VK_MENU))
+		else if((GetAsyncKeyState(VK_MENU) & 0x8000))
 			newTerrain = rand() % (maxTerrain + 1);
+
+		unsigned int flags = 0;
+		if(GetAsyncKeyState(0x44) & 0x8000) {
+			flags |= MapGenerator::extraBits::f_DecorHell;
+		}
+		MapGenerator::setFlagExtraFeatures(flags);
 
 		*terrainId = newTerrain;
 		setLastTerrainInfoById(newTerrain);
 
 //		printf("hookWriteMapThumbnail: Replacing terrain id: %d (0x%X) -> %d (0x%X)\n", oldTerrain, oldTerrain, newTerrain, newTerrain);
-		flagReseedTerrain = false;
 	}
 	origWriteMapThumbnail(a1);
+	if(flagReseedTerrain) {
+		MapGenerator::onReseedAndWriteMapThumbnail(a1);
+	}
+	flagReseedTerrain = false;
 }
 
 DWORD (__stdcall *origTerrain3)(int a1, char *a2, char *a3);
 DWORD __stdcall TerrainList::hookTerrain3(int a1, char *a2, char *a3) {
+//	printf("hookTerrain3: a1: 0x%X a2: %s a3: %s\n", a1, a2, a3);
 	if(!strcmp(a2, "Custom\\"))
 		return origTerrain3(a1, a2, a3);
 
@@ -161,7 +177,7 @@ void __stdcall TerrainList::callEditorAddTerrain(DWORD * a1, DWORD * a2) {
 //DWORD (__fastcall *origTerrain4)(DWORD *This, int EDX, int a2, DWORD a3);
 //DWORD TerrainList::hookTerrain4(DWORD *This, int EDX, int a2, DWORD a3) {
 //	auto ret = origTerrain4(This, EDX, a2, a3);
-////	printf("hookTerrain4: a2:0x%X a3:0x%X ret:0x%X\n", a2, a3, ret);
+//	printf("hookTerrain4: a2:0x%X a3:0x%X ret:0x%X\n", a2, a3, ret);
 //	return ret;
 //}
 
@@ -269,6 +285,7 @@ TerrainList::TerrainInfo &TerrainList::getLastTerrainInfo() {
 	return lastTerrainInfo;
 }
 
+DWORD addrAddTerrainsOnRebuildWindow;
 void TerrainList::patchTerrain4() {
 	static std::vector<const char*> terrainPtrList;
 	terrainPtrList.clear();
@@ -278,8 +295,11 @@ void TerrainList::patchTerrain4() {
 	void * ptr = terrainPtrList.data();
 
 	unsigned char size1 = terrainPtrList.size();
+	unsigned int size2 = size1;
 	Hooks::patchAsm(addrTerrain4 + 0x1B9, &size1, sizeof(size1));
 	Hooks::patchAsm(addrTerrain4 +0x207, (unsigned char*)&ptr, sizeof(DWORD));
+
+	Hooks::patchAsm(addrAddTerrainsOnRebuildWindow +0xAA, (unsigned char*)&size2, sizeof(size2));
 }
 
 void (__stdcall *origMapTypeChecks)();
@@ -287,11 +307,15 @@ void __stdcall TerrainList::hookMapTypeChecks() {
 	DWORD sesi;
 	_asm mov sesi, esi
 
+	MapGenerator::onMapTypeChecks(sesi);
+
 	DWORD mtype = *(DWORD*)(sesi + 0x554);
-	if(Config::isExperimentalMapTypeCheck()) {
+	if(Config::isExperimentalMapTypeCheck() && !Replay::isReplayPlaybackFlag()) {
 		if(mtype == 3 || (mtype <= 2 && *(DWORD*)(sesi+528) <= maxTerrain)) {
-			if(!lastTerrainInfo.hash.empty())
-				printf("hookMapTypeChecks: clearing lastTerrainInfo");
+			printf("mtype: %d sesi: %d\n", mtype, *(DWORD*)(sesi+528));
+			if(!lastTerrainInfo.hash.empty()) {
+				printf("hookMapTypeChecks: clearing lastTerrainInfo\n");
+			}
 			lastTerrainInfo.clear();
 		}
 	}
@@ -313,6 +337,7 @@ void TerrainList::install(){
 	DWORD addrTerrain2 = addrTerrain2Reference + 0xC10 + *(DWORD*)(addrTerrain2Reference + 0xC0C);
 	DWORD addrTerrain3 =  Hooks::scanPattern("Terrain3", "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x0C\x8B\x45\x08\x53\x56\x05\x00\x00\x00\x00\x57\x89\x44\x24\x0C\xC7\x44\x24\x00\x00\x00\x00\x00\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00", "??????xxxxxxxxx????xxxxxxxx?????x????x????");
 	addrTerrain4 = Hooks::scanPattern("Terrain4", "\x55\x8B\xEC\x83\xE4\xF8\x64\xA1\x00\x00\x00\x00\x6A\xFF\x68\x00\x00\x00\x00\x50\x8B\x45\x0C\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x20\x85\xC0\x53\x56\x57\x8B\xD9\x74\x63", "??????xx????xxx????xxxxxxx????xxxxxxxxxxxx");
+	addrAddTerrainsOnRebuildWindow = Hooks::scanPattern("AddTerrainsOnRebuildWindow", "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x08\x53\x55\x8B\xD9\x83\xBB\x00\x00\x00\x00\x00\x56\x57\x75\x0B\xA1\x00\x00\x00\x00\x89\x44\x24\x14\xEB\x11\x8B\x8B\x00\x00\x00\x00\x8B\x01\x8B\x40\x18", "??????xxxxxxxxx?????xxxxx????xxxxxxxx????xxxxx");
 
 	DWORD addrMapTypeChecks = Hooks::scanPattern("MapTypeChecks", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\xA1\x00\x00\x00\x00\x8B\x0D\x00\x00\x00\x00", "???????xx????xxxx????xx????x????xx????");
 	getDataPath =
@@ -324,14 +349,17 @@ void TerrainList::install(){
 	origEditorAddTerrain = addrTerrain3 + 0x121 + *(DWORD*)(addrTerrain3 + 0x11D);
 	printf("origEditorLoadTextImg: 0x%X origEditorAddTerrain: 0x%X\n", origEditorLoadTextImg, origEditorAddTerrain);
 
-	Hooks::minhook("Terrain0", addrTerrain0, (DWORD*) &hookTerrain0, (DWORD*)&origTerrain0);
-	Hooks::minhook("Terrain2", addrTerrain2, (DWORD*) &hookTerrain2, (DWORD*)&origTerrain2);
-	Hooks::minhook("Terrain3", addrTerrain3, (DWORD*) &hookTerrain3, (DWORD*)&origTerrain3);
-//	Hooks::minhook("Terrain4", addrTerrain4, (DWORD*) &hookTerrain4, (DWORD*)&origTerrain4);
+	Hooks::hook("Terrain0", addrTerrain0, (DWORD *) &hookTerrain0, (DWORD *) &origTerrain0);
+	Hooks::hook("Terrain2", addrTerrain2, (DWORD *) &hookTerrain2, (DWORD *) &origTerrain2);
+	Hooks::hook("Terrain3", addrTerrain3, (DWORD *) &hookTerrain3, (DWORD *) &origTerrain3);
+//	Hooks::hook("Terrain4", addrTerrain4, (DWORD*) &hookTerrain4, (DWORD*)&origTerrain4);
 
-	Hooks::minhook("TerrainRandomSeed", addrTerrainRandomSeed, (DWORD*) &hookTerrainRandomSeed, (DWORD*)&origTerrainRandomSeed);
-	Hooks::minhook("WriteMapThumbnail", addrWriteMapThumbnail, (DWORD*) &hookWriteMapThumbnail, (DWORD*)&origWriteMapThumbnail);
+	Hooks::hook("TerrainRandomSeed", addrTerrainRandomSeed, (DWORD *) &hookTerrainRandomSeed, (DWORD *) &origTerrainRandomSeed);
+	Hooks::hook("WriteMapThumbnail", addrWriteMapThumbnail, (DWORD *) &hookWriteMapThumbnail, (DWORD *) &origWriteMapThumbnail);
 //	Hooks::minhook("TerrainRandomSeedIdModifier", addrTerrainRandomSeedIdModifier, (DWORD*) &hookTerrainRandomSeedIdModifier, (DWORD*)&origTerrainRandomSeedIdModifier);
-	Hooks::minhook("MapTypeChecks", addrMapTypeChecks, (DWORD*) &hookMapTypeChecks, (DWORD*)&origMapTypeChecks);
+	Hooks::hook("MapTypeChecks", addrMapTypeChecks, (DWORD *) &hookMapTypeChecks, (DWORD *) &origMapTypeChecks);
 }
 
+void TerrainList::onFrontendExit() {
+	lastTerrainInfo.clear();
+}

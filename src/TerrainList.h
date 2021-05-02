@@ -42,7 +42,7 @@ private:
 	static DWORD __stdcall hookTerrain0(int a1, char* a2, char a3);
 	static char* __fastcall hookTerrain2(int id);
 	static DWORD __stdcall hookTerrain3(int a1, char *a2, char *a3);
-//	static DWORD __fastcall hookTerrain4(DWORD * This, int EDX, int a2, DWORD a3);
+	static DWORD __fastcall hookTerrain4(DWORD * This, int EDX, int a2, DWORD a3);
 	static inline DWORD addrTerrain4;
 
 	static void __stdcall hookTerrainRandomSeed(int a2);
@@ -66,6 +66,7 @@ public:
 
 	static bool setLastTerrainInfoById(int newTerrain);
 	static bool setLastTerrainInfoByHash(std::string md5);
+	static void onFrontendExit();
 };
 
 

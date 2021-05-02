@@ -31,9 +31,12 @@ add_library(wkTerrainSync SHARED
         src/W2App.cpp src/W2App.h
         src/Sprites.cpp src/Sprites.h
         src/Utils.cpp src/Utils.h
+        src/MapGenerator.cpp src/MapGenerator.h
+        src/FrontendDialogs.cpp src/FrontendDialogs.h
+
         ${CMAKE_CURRENT_BINARY_DIR}/resource.rc
         )
 
 set_property(TARGET wkTerrainSync hacklib PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-target_link_libraries(wkTerrainSync hacklib libMinHook-x86-v141-mt version)
+target_link_libraries(wkTerrainSync hacklib capstone Polyhook_2 version)

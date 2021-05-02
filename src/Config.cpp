@@ -1,5 +1,5 @@
 
-#include <Windows.h>
+#include <windows.h>
 #include "Config.h"
 #include "Utils.h"
 
@@ -15,14 +15,20 @@ void Config::readConfig() {
 	experimentalMapTypeCheck = GetPrivateProfileIntA("general", "UseExperimentalMapTypeCheck", 1, iniFile.c_str());
 	messageBoxEnabled = GetPrivateProfileIntA("general", "UseFrontendMessageBox", 1, iniFile.c_str());
 	nagMessageEnabled = GetPrivateProfileIntA("general", "SendNagMessage", 1, iniFile.c_str());
+	showInstalledTerrains = GetPrivateProfileIntA("general", "ShowInstalledTerrainsInChat", 0, iniFile.c_str());
+	thumbnailColor = GetPrivateProfileIntA("general", "MapThumbnailColor", 191, iniFile.c_str());
+	printMapScaleInChat = GetPrivateProfileIntA("general", "PrintMapScaleInChat", 1, iniFile.c_str());
 
 	parallaxBackA = GetPrivateProfileIntA("parallax", "parallaxBackA", 9011200, iniFile.c_str());
 	parallaxBackB = GetPrivateProfileIntA("parallax", "parallaxBackB", 42172416, iniFile.c_str());
 	parallaxFrontA = GetPrivateProfileIntA("parallax", "parallaxFrontA", 65536, iniFile.c_str());
 	parallaxFrontB = GetPrivateProfileIntA("parallax", "parallaxBackB", 48003809, iniFile.c_str());
+	parallaxHideOnBigMaps = GetPrivateProfileIntA("parallax", "HideOnBigMaps", 1, iniFile.c_str());
 
 	devConsoleEnabled = GetPrivateProfileIntA("debug", "EnableDevConsole", 1, iniFile.c_str());
 	hexDumpPackets = GetPrivateProfileIntA("debug", "HexDumpPackets", 0, iniFile.c_str());
+
+	superFrontendThumbnailFix = GetPrivateProfileIntA("fixes", "SuperFrontendFixMapThumbnail", 1, iniFile.c_str());
 
 	char buff[2048];
 	GetPrivateProfileStringA("exceptions", "ExtendedBackSprLoader", "e27d433fcd8ac2e696f01437525f34c5,", buff, sizeof(buff), iniFile.c_str());
@@ -121,7 +127,7 @@ std::string Config::getModuleStr() {
 	return "wkTerrainSync";
 }
 std::string Config::getVersionStr() {
-	return "v1.0.2";
+	return "v1.1.0";
 }
 
 std::string Config::getBuildStr() {
@@ -172,3 +178,22 @@ bool Config::isNagMessageEnabled() {
 	return nagMessageEnabled;
 }
 
+int Config::getParallaxHideOnBigMaps() {
+	return parallaxHideOnBigMaps;
+}
+
+bool Config::isShowInstalledTerrainsEnabled() {
+	return showInstalledTerrains;
+}
+
+int Config::getThumbnailColor() {
+	return thumbnailColor;
+}
+
+bool Config::isSuperFrontendThumbnailFix() {
+	return superFrontendThumbnailFix;
+}
+
+bool Config::isPrintMapScaleInChat() {
+	return printMapScaleInChat;
+}

@@ -10,8 +10,6 @@
 typedef unsigned long       DWORD;
 class Protocol {
 public:
-
-
 	struct ProtocolHeader {
 		unsigned short int pktId;
 	};
@@ -40,9 +38,7 @@ public:
 	static void parseMsgHost(DWORD hostThis, std::string data, int slot);
 	static void parseMsgClient(std::string data, DWORD connection);
 
-
 	static std::string dumpTerrainInfo();
-
 
 	static void install();
 };

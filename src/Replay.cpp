@@ -5,6 +5,7 @@
 #include "Hooks.h"
 #include "TerrainList.h"
 #include "Config.h"
+#include "MapGenerator.h"
 
 Replay::ReplayOffsets Replay::extractReplayOffsets(char * replayName) {
 	ReplayOffsets offsets;
@@ -44,8 +45,8 @@ int __stdcall Replay::hookCreateReplay(int a1, int a2, __time64_t Time) {
 	auto ret = origCreateReplay(a1, a2, Time);
 
 	auto & lastTerrainInfo = TerrainList::getLastTerrainInfo();
-	if(lastTerrainInfo.hash.empty() || lastTerrainInfo.name.empty())
-		return ret;
+//	if(lastTerrainInfo.hash.empty() || lastTerrainInfo.name.empty())
+//		return ret;
 
 	char * replayName = (char*)(a1 + 0xDF60);
 	printf("hookCreateReplay: %s\n", replayName);
@@ -62,6 +63,7 @@ int __stdcall Replay::hookCreateReplay(int a1, int a2, __time64_t Time) {
 		js["name"] = lastTerrainInfo.name;
 		js["hash"] = lastTerrainInfo.hash;
 		Config::addVersionInfoToJson(js);
+		MapGenerator::onCreateReplay(js);
 		std::string data = js.dump();
 
 		size_t terrainChunkSize = sizeof(size_t) + sizeof(replayMagic) + data.size();
@@ -86,9 +88,9 @@ int __stdcall Replay::hookCreateReplay(int a1, int a2, __time64_t Time) {
 
 void Replay::loadTerrainInfo(char *replayName) {
 	printf("loadTerrainInfo: %s\n", replayName);
-	FILE * f = fopen(replayName, "rb");
 	auto offsets = extractReplayOffsets(replayName);
-
+	replayPlaybackFlag = true;
+	FILE * f = fopen(replayName, "rb");
 	try {
 		if (!f)
 			throw std::runtime_error("Failed to open replay file: " + std::string(replayName));
@@ -113,10 +115,14 @@ void Replay::loadTerrainInfo(char *replayName) {
 			printf("loadTerrainInfo: Terrain chunk contents: |%s|\n", data);
 			nlohmann::json terrain = nlohmann::json::parse(data);
 			free(data);
-			if(!TerrainList::setLastTerrainInfoByHash(terrain["hash"])) {
-				char buff[2048];
-				sprintf_s(buff, "This replay file was recorded using a custom terrain which is currently not installed in your WA directory.\nYou will need to obtain the terrain files in order to play this replay.\nSorry about that.\n\nTerrain metadata: %s", terrain.dump(4).c_str());
-				MessageBoxA(0, buff, Config::getFullStr().c_str(), MB_OK | MB_ICONERROR);
+			MapGenerator::onLoadReplay(terrain);
+			std::string thash = terrain["hash"];
+			if(!thash.empty()) {
+				if(!TerrainList::setLastTerrainInfoByHash(terrain["hash"])) {
+					char buff[2048];
+					sprintf_s(buff, "This replay file was recorded using a custom terrain which is currently not installed in your WA directory.\nYou will need to obtain the terrain files in order to play this replay.\nSorry about that.\n\nTerrain metadata: %s", terrain.dump(4).c_str());
+					MessageBoxA(0, buff, Config::getFullStr().c_str(), MB_OK | MB_ICONERROR);
+				}
 			}
 		}
 		fclose(f);
@@ -130,5 +136,9 @@ void Replay::loadTerrainInfo(char *replayName) {
 
 void Replay::install() {
 	DWORD addrCreateReplay =  Hooks::scanPattern("CreateReplay", "\x55\x8B\xEC\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x8B\x5D\x08\x56\x57\x89\x65\xF0\x6A\x00\x68\x00\x00\x00\x00\xC6\x83\x00\x00\x00\x00\x00\xC7\x83\x00\x00\x00\x00\x00\x00\x00\x00", "??????????xx????xxxx????xx????xxxxxxxxxxxx????xx?????xx????????");
-	Hooks::minhook("CreateReplay", addrCreateReplay, (DWORD*)&hookCreateReplay, (DWORD*)&origCreateReplay);
+	Hooks::hook("CreateReplay", addrCreateReplay, (DWORD *) &hookCreateReplay, (DWORD *) &origCreateReplay);
+}
+
+bool Replay::isReplayPlaybackFlag() {
+	return replayPlaybackFlag;
 }

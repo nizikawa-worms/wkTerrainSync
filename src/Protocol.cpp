@@ -73,10 +73,14 @@ void Protocol::parseMsgClient(std::string data, DWORD connection) {
 		if(module == Config::getModuleStr()) {
 			if (mType == "TerrainInfo") {
 				printf("Received TerrainInfo packet: %s\n", data.c_str());
-				if (!TerrainList::setLastTerrainInfoByHash(parsed["hash"])) {
+				std::string thash = parsed["hash"];
+				if(thash.empty()) {
+					throw std::runtime_error("Received TerrainInfo with empty hash. This is a bug. Data: " + data);
+				}
+				if (!TerrainList::setLastTerrainInfoByHash(thash)) {
 					char buff[512];
 					if (Config::isDownloadAllowed()) {
-						std::string thash = parsed["hash"];
+
 						if(requestedHashes.find(thash) == requestedHashes.end()) {
 							requestedHashes.insert(thash);
 							printf("Requesting terrain files!\n");
@@ -126,7 +130,9 @@ void Protocol::handleTerrainRequest(DWORD hostThis, nlohmann::json & parsed, int
 		return;
 	}
 	std::string terrainHash = parsed["terrainHash"];
-
+	if(terrainHash.empty()) {
+		throw std::runtime_error("Received TerrainRequest with empty hash. This is a bug.");
+	}
 	auto & customTerrains = TerrainList::getCustomTerrains();
 	auto it = customTerrains.find(terrainHash);
 	if(it == customTerrains.end())

@@ -4,6 +4,9 @@
 
 typedef unsigned long DWORD;
 class BitmapImage {
+private:
+	static BitmapImage * __stdcall hookConstructBitmapImage(int width);
+
 public:
 	int vtable_dword0; // 0x0
 	int unknown4; // 0x4

@@ -7,7 +7,6 @@ class Replay {
 public:
 	static const unsigned int replayMagic = 0x37218814;
 	static const unsigned int maxTerrainChunkSize = 0x1000;
-
 private:
 	struct ReplayOffsets {
 		size_t fileSize = 0;
@@ -21,10 +20,12 @@ private:
 
 	static ReplayOffsets extractReplayOffsets(char * replayName);
 	static int __stdcall hookCreateReplay(int a1, int a2, __time64_t Time);
-
+	static inline bool replayPlaybackFlag = false;
 public:
 	static void loadTerrainInfo(char * replayName);
 	static void install();
+
+	static bool isReplayPlaybackFlag();
 };
 
 

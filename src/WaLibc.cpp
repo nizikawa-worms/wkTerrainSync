@@ -38,6 +38,6 @@ int WaLibc::install() {
 
 	DWORD addrWaFopenRef = Hooks::scanPattern("WaFopenRef", "\x81\xEC\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\xE8\x00\x00\x00\x00\x83\xC4\x08\x85\xC0\x89\x44\x24\x14\x0F\x84\x00\x00\x00\x00\x0F\xB7\x06", "??????x????xx????xxxxxxxxxxx????xxx");
 	DWORD addrWaFopen = *(DWORD*)(addrWaFopenRef + 0xD) + addrWaFopenRef + 0x11;
-	Hooks::minhook("WaFopen", addrWaFopen, (DWORD*)&hookWaFopen, (DWORD*)&origWaFopen);
+	Hooks::hook("WaFopen", addrWaFopen, (DWORD *) &hookWaFopen, (DWORD *) &origWaFopen);
 	return 0;
 }

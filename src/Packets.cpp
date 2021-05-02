@@ -7,7 +7,7 @@
 #include "Config.h"
 #include "Utils.h"
 #include "LobbyChat.h"
-
+#include "MapGenerator.h"
 
 int (__fastcall *origHostLobbyPacketHandler)(DWORD This, DWORD EDX, int slot, unsigned char * packet, size_t size);
 int __fastcall Packets::hookHostLobbyPacketHandler(DWORD This, DWORD EDX, int slot, unsigned char * packet, size_t size) {
@@ -46,6 +46,9 @@ int __fastcall Packets::hookClientLobbyPacketHandler(DWORD This, DWORD EDX, unsi
 		Protocol::parseMsgClient(std::string((char*)packet, size), This);
 		return 0;
 	} else {
+		if(ptype == Protocol::terrainPacketID) {
+			MapGenerator::onTerrainPacket(This, 0, packet, size);
+		}
 		return origClientLobbyPacketHandler(This, 0, packet, size);
 	}
 }
@@ -60,6 +63,9 @@ int __fastcall Packets::hookClientEndscreenPacketHandler(DWORD This, DWORD EDX, 
 		Protocol::parseMsgClient(std::string((char*)packet, size), This);
 		return 0;
 	} else {
+		if(ptype == Protocol::terrainPacketID) {
+			MapGenerator::onTerrainPacket(This, 0, packet, size);
+		}
 		return origClientEndscreenPacketHandler(This, 0, packet, size);
 	}
 }
@@ -71,17 +77,25 @@ int __fastcall Packets::hookInternalSendPacket(DWORD This, DWORD EDX, unsigned c
 	}
 	if(internalFlag) {
 		auto ptype = *(unsigned short int*) packet;
-		if(ptype == Protocol::terrainPacketID ) {
-			fixTerrainId(This, packet, 0x2C);
-			sendNagMessage(This);
-		} else if(ptype == Protocol::colormapPacketID) {
+//		printf("hookInternalSendPacket: ptype: 0x%X\n", ptype);
+		if(ptype == Protocol::terrainPacketID && size >= 0x2C) {
+			if(MapGenerator::getScaleXIncrements() || MapGenerator::getScaleYIncrements()) {
+				sendBigMapNagMessage(This);
+			}
+			if(packet[0x8] != 3) { //somehow, small PNG maps (type 3) are also sent with this packet id
+				fixTerrainId(This, packet, 0x2C);
+				sendTerrainNagMessage(This);
+			} else {
+				printf("Not patching terrainPacket, because map type is a PNG map: 0x%X\n", packet[0x8]);
+			}
+		} else if(ptype == Protocol::colormapPacketID && size >= 0x34) {
 			size_t offset = *(size_t*)&packet[8];
 			if(offset == 0) {
 				int mtype = packet[0x10];
 				if(mtype == 1 || mtype == 2) {
 					//bit/lev maps
 					fixTerrainId(This, packet, 0x34);
-					sendNagMessage(This);
+					sendTerrainNagMessage(This);
 				}
 			}
 		}
@@ -107,10 +121,19 @@ void Packets::sendDataToClient_connection(DWORD connection, std::string msg) {
 	origInternalSendPacket(connection, 0, (unsigned char*)data.c_str(), data.size());
 }
 
-void Packets::sendNagMessage(DWORD connection) {
+void Packets::sendTerrainNagMessage(DWORD connection) {
 	if(Config::isNagMessageEnabled()) {
 		std::string data = {0x00, 0x00};
-		data += LobbyChat::getNagMessage();
+		data += LobbyChat::getTerrainNagMessage();
+		data += {0x00};
+		origInternalSendPacket(connection, 0, (unsigned char *) data.c_str(), data.size());
+	}
+}
+
+void Packets::sendBigMapNagMessage(DWORD connection) {
+	if(Config::isNagMessageEnabled()) {
+		std::string data = {0x00, 0x00};
+		data += LobbyChat::getBigMapNagMessage();
 		data += {0x00};
 		origInternalSendPacket(connection, 0, (unsigned char *) data.c_str(), data.size());
 	}
@@ -159,9 +182,61 @@ void __stdcall Packets::hookSendColorMapData(DWORD hostThis, int slot) {
 }
 
 void Packets::resendMapDataToClient(DWORD hostThis, DWORD slot) {
+	if(!hostThis) {
+		printf("resendMapDataToClient - hostThis is null\n");
+		return;
+	}
 	_asm push slot
 	_asm mov eax, hostThis
 	_asm call addrSendMapData
+}
+
+void Packets::resendMapDataToAllClients() {
+	DWORD hostThis = LobbyChat::getLobbyHostScreen();
+	if(!hostThis) {
+		printf("resendMapDataToAllClients - hostThis is null\n");
+		return;
+	}
+	for(int i=0; i < numSlots; i++) {
+		resendMapDataToClient(hostThis, i);
+	}
+}
+
+
+int (__stdcall * origHostBroadcastData)(unsigned char *data_a2, int size_a3); // eax = host slot
+int Packets::callHostBroadcastData(unsigned char * packet, size_t psize) {
+	if(!addrHostSlot || !isHost()) {
+		return 0;
+	}
+	int retv;
+	_asm mov eax, addrHostSlot
+	_asm push psize
+	_asm push packet
+	_asm call origHostBroadcastData
+	_asm mov retv, eax
+
+	return retv;
+}
+
+void Packets::resetPlayerBulbs() {
+	if(!addrClientSlot) {
+		return;
+	}
+	for (int i=0; i < numSlots; i++) {
+		unsigned char * addr = (unsigned char*)addrClientSlot + 0x2001E + 0x78 * i;
+		*addr = 0;
+	}
+
+	if(isHost()) {
+		auto hostScreen = LobbyChat::getLobbyHostScreen();
+		if(hostScreen)
+			(*(void (__thiscall **)(DWORD))(*(DWORD *)hostScreen + 372))(hostScreen);
+	}
+	else if(isClient()) {
+		auto clientScreen = LobbyChat::getLobbyClientScreen();
+		if(clientScreen)
+			(*(void (__thiscall **)(DWORD))(*(DWORD *)clientScreen + 372))(clientScreen);
+	}
 }
 
 void Packets::install() {
@@ -173,18 +248,22 @@ void Packets::install() {
 	DWORD addrClientEndscreenPacketHandler = Hooks::scanPattern("ClientEndscreenPacketHandler", "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x08\x56\x8B\x75\x08\x0F\xB7\x06\x83\xC0\xE7\x83\xF8\x10\x57\x8B\xF9\x0F\x87\x00\x00\x00\x00\x0F\xB6\x80\x00\x00\x00\x00\xFF\x24\x85\x00\x00\x00\x00\x83\x7D\x0C\x08\x0F\x82\x00\x00\x00\x00\x8B\x4E\x04\x83\xE9\x01\x83\xF9\x0C\x0F\x83\x00\x00\x00\x00", "??????xxxxxxxxxxxxxxxxxxxxx????xxx????xxx????xxxxxx????xxxxxxxxxxx????"); //0x4BD400
 	DWORD addrInternalSendPacket = Hooks::scanPattern("InternalSendPacket", "\x53\x8B\x5C\x24\x0C\x55\x56\x57\x8D\x6B\x04\x55\x8B\xF9\xE8\x00\x00\x00\x00\x8B\x54\x24\x18\x8B\xF0\x8D\x43\x04\x66\x89\x46\x02\x53\xC6\x46\x01\x00\x8A\x8F\x00\x00\x00\x00\x52\x8D\x46\x04", "??????xxxxxxxxx????xxxxxxxxxxxxxxxxxxxx????xxxx"); //58FCA0
 	DWORD addrSendColorMapData = Hooks::scanPattern("SendColorMapData", "\x55\x8B\x6C\x24\x0C\x69\xED\x00\x00\x00\x00\x57\x8B\xBD\x00\x00\x00\x00\x85\xFF\x0F\x8C\x00\x00\x00\x00\x8B\x44\x24\x0C\x53\x8B\x98\x00\x00\x00\x00\x2B\xDF\x81\xFB\x00\x00\x00\x00\x56\x7E\x05", "??????x????xxx????xxxx????xxxxxxx????xxxx????xxx");
+	origHostBroadcastData =
+		(int (__stdcall *)(unsigned char *,int))
+			Hooks::scanPattern("HostBroadcastData", "\x83\x78\x0C\x00\x55\x8B\x6C\x24\x0C\x74\x50\x53\x56\xBB\x00\x00\x00\x00\x57\x8D\xB0\x00\x00\x00\x00\x8D\x7B\x05\x8D\x64\x24\x00\x83\xBE\x00\x00\x00\x00\x00\x75\x1E\x80\xBE\x00\x00\x00\x00\x00\x74\x15\x8B\x4C\x24\x14", "??????xxxxxxxx????xxx????xxxxxxxxx?????xxxx?????xxxxxx");
+
 	addrSendMapData = Hooks::scanPattern("SendMapData", "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x2C\x53\x56\x8B\xF0\x8B\x9E\x00\x00\x00\x00\x85\xDB\x57\x7C\x75\x81\xC6\x00\x00\x00\x00\x8D\x7C\x24\x16\x8B\xCB\x8B\xC6\x66\xC7\x44\x24\x00\x00\x00\xE8\x00\x00\x00\x00\x3B\x9E\x00\x00\x00\x00\x7D\x26\x85\xDB\x8B\x86\x00\x00\x00\x00\x8B\xCB\x74\x07", "??????xxxxxxxxx????xxxxxxx????xxxxxxxxxxxx???x????xx????xxxxxx????xxxx");
 	addrClientSlot = *(DWORD*)(addrClientEndscreenPacketHandler + 0x103);
 	addrHostSlot = *(DWORD*)(addrHostEndscreenPacketHandler + 0xC6);
 	printf("addrClientSlot:0x%X addrHostSlot:0x%X\n", addrClientSlot, addrHostSlot);
 
-	Hooks::minhook("HostLobbyPacketHandler", addrHostLobbyPacketHandler, (DWORD*) &hookHostLobbyPacketHandler, (DWORD*)&origHostLobbyPacketHandler);
-	Hooks::minhook("HostEndscreenPacketHandler", addrHostEndscreenPacketHandler, (DWORD*) &hookHostEndscreenPacketHandler, (DWORD*)&origHostEndscreenPacketHandler);
-	Hooks::minhook("ClientLobbyPacketHandler", addrClientLobbyPacketHandler, (DWORD*) &hookClientLobbyPacketHandler, (DWORD*)&origClientLobbyPacketHandler);
-	Hooks::minhook("ClientEndscreenPacketHandler", addrClientEndscreenPacketHandler, (DWORD*) &hookClientEndscreenPacketHandler, (DWORD*)&origClientEndscreenPacketHandler);
-	Hooks::minhook("InternalSendPacket", addrInternalSendPacket, (DWORD*) &hookInternalSendPacket, (DWORD*)&origInternalSendPacket);
-	Hooks::minhook("SendMapData", addrSendMapData, (DWORD*) &hookSendMapData, (DWORD*)&origSendMapData);
-	Hooks::minhook("SendColorMapData", addrSendColorMapData, (DWORD*) &hookSendColorMapData, (DWORD*)&origSendColorMapData);
+	Hooks::hook("HostLobbyPacketHandler", addrHostLobbyPacketHandler, (DWORD *) &hookHostLobbyPacketHandler, (DWORD *) &origHostLobbyPacketHandler);
+	Hooks::hook("HostEndscreenPacketHandler", addrHostEndscreenPacketHandler, (DWORD *) &hookHostEndscreenPacketHandler, (DWORD *) &origHostEndscreenPacketHandler);
+	Hooks::hook("ClientLobbyPacketHandler", addrClientLobbyPacketHandler, (DWORD *) &hookClientLobbyPacketHandler, (DWORD *) &origClientLobbyPacketHandler);
+	Hooks::hook("ClientEndscreenPacketHandler", addrClientEndscreenPacketHandler, (DWORD *) &hookClientEndscreenPacketHandler, (DWORD *) &origClientEndscreenPacketHandler);
+	Hooks::hook("InternalSendPacket", addrInternalSendPacket, (DWORD *) &hookInternalSendPacket, (DWORD *) &origInternalSendPacket);
+	Hooks::hook("SendMapData", addrSendMapData, (DWORD *) &hookSendMapData, (DWORD *) &origSendMapData);
+	Hooks::hook("SendColorMapData", addrSendColorMapData, (DWORD *) &hookSendColorMapData, (DWORD *) &origSendColorMapData);
 }
 
 bool Packets::isHost() {

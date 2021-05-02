@@ -1,0 +1,7 @@
+## License ##
+
+Free to use for any purpose. Don't claim you wrote the code or modified versions. If you release code or binaries give credit and link to this repository.
+
+If you are making money with this code, please consider sharing a bit!
+
+[Paypal Donate Link](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=EW66GFAYT9K9C)
