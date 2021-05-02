@@ -127,7 +127,7 @@ std::string Config::getModuleStr() {
 	return "wkTerrainSync";
 }
 std::string Config::getVersionStr() {
-	return "v1.1.0";
+	return "v1.1.0a";
 }
 
 std::string Config::getBuildStr() {

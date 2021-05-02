@@ -44,12 +44,14 @@ Replay::ReplayOffsets Replay::extractReplayOffsets(char * replayName) {
 int __stdcall Replay::hookCreateReplay(int a1, int a2, __time64_t Time) {
 	auto ret = origCreateReplay(a1, a2, Time);
 
-	auto & lastTerrainInfo = TerrainList::getLastTerrainInfo();
-//	if(lastTerrainInfo.hash.empty() || lastTerrainInfo.name.empty())
-//		return ret;
-
 	char * replayName = (char*)(a1 + 0xDF60);
 	printf("hookCreateReplay: %s\n", replayName);
+
+	auto & lastTerrainInfo = TerrainList::getLastTerrainInfo();
+	if(lastTerrainInfo.hash.empty() && !MapGenerator::getScaleXIncrements() && !MapGenerator::getScaleYIncrements()) {
+		printf("Not saving wkterrainsync metadata in replay file\n");
+		return ret;
+	}
 
 	auto offsets = extractReplayOffsets(replayName);
 

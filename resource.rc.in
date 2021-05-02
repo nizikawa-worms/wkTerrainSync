@@ -13,10 +13,10 @@ BLOCK "StringFileInfo"
 		VALUE "CompanyName", "Nizikawa"
 		VALUE "FileDescription", "wkTerrain with automatic data synchronization and extra customization"
 		VALUE "FileVersion", "1.1.0.0"
-		VALUE "InternalName", "wkTerrainSync v1.1.0"
+		VALUE "InternalName", "wkTerrainSync v1.1.0a"
 		VALUE "LegalCopyright", "Nizikawa"
 		VALUE "OriginalFilename", "wkTerrainSync.dll"
-		VALUE "ProductName", "wkTerrainSync v1.1.0"
+		VALUE "ProductName", "wkTerrainSync v1.1.0a"
 		VALUE "ProductVersion", "1.1.0.0"
 	}
 }
