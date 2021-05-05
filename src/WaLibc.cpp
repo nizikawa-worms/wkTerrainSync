@@ -1,7 +1,7 @@
 #include "WaLibc.h"
 #include "Hooks.h"
 #include "TerrainList.h"
-
+#include "Config.h"
 
 void *(__cdecl * origWaNew)(size_t size);
 void *WaLibc::waMalloc(size_t size) {
@@ -18,7 +18,7 @@ FILE *__cdecl hookWaFopen(char *Filename, char *Mode) {
 	if(!strcmp(Filename, "data\\Gfx\\Water.dir")) {
 		char buff[MAX_PATH];
 		auto terraininfo = TerrainList::getLastTerrainInfo();
-		if(!terraininfo.dirname.empty() && terraininfo.hasWaterDir) {
+		if(!terraininfo.dirname.empty() && terraininfo.hasWaterDir && Config::isCustomWaterAllowed()) {
 			sprintf_s(buff, "data\\level\\%s\\water.dir", terraininfo.dirname.c_str());
 			FILE * pf = fopen(buff, "rb");
 			if(pf) {

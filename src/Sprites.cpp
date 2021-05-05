@@ -8,10 +8,10 @@
 #include "TerrainList.h"
 #include "MapGenerator.h"
 
-DWORD (__fastcall *origLoadSpriteFromVFS)(DWORD DDdisplay, DWORD EDX, int palette_num_a2, int index_a3, int a4, int vfs_a5, char *filename_a6);
+DWORD (__fastcall *origLoadSpriteFromVFS)(DWORD DDdisplay, DWORD EDX, int palette_num_a2, int index_a3, int a4, int vfs_a5, const char *filename_a6);
 
-DWORD (__fastcall *origLoadSpriteFromTerrain)(DWORD DDDisplay, DWORD edx, int a2, int sprite_id_a3, int a4, char *filename);
-DWORD __fastcall Sprites::hookLoadSpriteFromTerrain(DWORD DDDisplay, DWORD edx, int palette_num_a2, int sprite_id_a3, int vfs_a4, char *filename) {
+DWORD (__fastcall *origLoadSpriteFromTerrain)(DWORD DDDisplay, DWORD edx, int a2, int sprite_id_a3, int a4, const char *filename);
+DWORD __fastcall Sprites::hookLoadSpriteFromTerrain(DWORD DDDisplay, DWORD edx, int palette_num_a2, int sprite_id_a3, int vfs_a4, const char *filename) {
 	if(!strcmp(filename, "back.spr")) {
 		auto & backSprExceptions = Config::getBackSprExceptions();
 		auto & lastTerrainInfo = TerrainList::getLastTerrainInfo();
@@ -24,14 +24,16 @@ DWORD __fastcall Sprites::hookLoadSpriteFromTerrain(DWORD DDDisplay, DWORD edx, 
 		} else {
 			origLoadSpriteFromTerrain(DDDisplay, 0, palette_num_a2, sprite_id_a3, vfs_a4, filename);
 		}
-		origLoadSpriteFromVFS(DDDisplay, 0, palette_num_a2, back2SprId, 0, vfs_a4, "back2.spr");
-		origLoadSpriteFromVFS(DDDisplay, 0, palette_num_a2, frontSprId, 0, vfs_a4, "front.spr");
+		if(Config::isAdditionalParallaxLayersAllowed()) {
+			origLoadSpriteFromVFS(DDDisplay, 0, palette_num_a2, back2SprId, 0, vfs_a4, "back2.spr");
+			origLoadSpriteFromVFS(DDDisplay, 0, palette_num_a2, frontSprId, 0, vfs_a4, "front.spr");
+		}
 		return 1;
 	} else {
 		 return origLoadSpriteFromTerrain(DDDisplay, edx, palette_num_a2, sprite_id_a3, vfs_a4, filename);
 	}
 }
-DWORD overrideSprite(DWORD DD_Display, int palette, int index, int vfs, char *filename) {
+DWORD overrideSprite(DWORD DD_Display, int palette, int index, int vfs, const char *filename) {
 	char buff[256];
 	DWORD res;
 	auto w2wrapper = W2App::getAddrW2Wrapper();
@@ -47,7 +49,7 @@ DWORD overrideSprite(DWORD DD_Display, int palette, int index, int vfs, char *fi
 	return res;
 }
 
-BitmapImage * overrideImg(DWORD DD_Display, DWORD vfs, char * filename, int palette_id) {
+BitmapImage * overrideImg(DWORD DD_Display, DWORD vfs, const char * filename, int palette_id) {
 	char buff[256];
 	auto w2wrapper = W2App::getAddrW2Wrapper();
 	bool colorblind = (w2wrapper && *(DWORD*)(w2wrapper + 0xF374));
@@ -61,10 +63,10 @@ BitmapImage * overrideImg(DWORD DD_Display, DWORD vfs, char * filename, int pale
 	return img;
 }
 
-DWORD __fastcall Sprites::hookLoadSpriteFromVFS(DWORD DD_Display, int EDX, int palette, int index, int a4, int vfs_a5, char *filename) {
+DWORD __fastcall Sprites::hookLoadSpriteFromVFS(DWORD DD_Display, int EDX, int palette, int index, int a4, int vfs_a5, const char *filename) {
 	auto ddgame = W2App::getAddrDdGame();
 	DWORD res = 0;
-	if(ddgame) {
+	if(ddgame && Config::isSpriteOverrideAllowed()) {
 		DWORD pclandscape = *(DWORD*)(ddgame + 0x4CC);
 		if(pclandscape) {
 			DWORD terrainvfs = *(DWORD*)(pclandscape + 0xB34);
@@ -96,29 +98,32 @@ DWORD __fastcall Sprites::hookLoadSpriteFromVFS(DWORD DD_Display, int EDX, int p
 int (__fastcall *origDrawBackSprite)(int *a1, int a2, int a3, int a4, int a5, int a6, int sprite_a7, int a8);
 int __fastcall Sprites::hookDrawBackSprite(int *a1, int a2, int a3, int a4, int a5, int a6, int sprite_a7, int a8) {
 	auto ret = origDrawBackSprite(a1, a2, a3, a4, a5, a6, sprite_a7, a8);
-	static int la4 = 0;
-	static int la8 = 0;
-	if(sprite_a7 == 0x1026C) {
-		la4 = a4;
-		la8 = a8;
-	}
-	if(sprite_a7 == 0x1026D) {
-		static int hide = Config::getParallaxHideOnBigMaps(); // todo: scale parallax params
-		if(MapGenerator::getScaleYIncrements() == 0 || !hide) {
-			static int backA = Config::getParallaxBackA();
-			static int backB = Config::getParallaxBackB();
+	static bool allowparallax = Config::isAdditionalParallaxLayersAllowed();
+	if(allowparallax) {
+		static int la4 = 0;
+		static int la8 = 0;
+		if (sprite_a7 == 0x1026C) {
+			la4 = a4;
+			la8 = a8;
+		}
+		if (sprite_a7 == 0x1026D) {
+			static int hide = Config::getParallaxHideOnBigMaps(); // todo: scale parallax params
+			if (MapGenerator::getScaleYIncrements() == 0 || !hide) {
+				static int backA = Config::getParallaxBackA();
+				static int backB = Config::getParallaxBackB();
 //			origDrawBackSprite(a1, a2*2.75, a3 + 1, la4, a5*1.125 , 3, 0x10000 | back2SprId, la8);
-			origDrawBackSprite(a1, backA, a3 + 1, la4, backB, 3, 0x10000 | back2SprId, la8);
-			static int frontA = Config::getParallaxFrontA();
-			static int frontB = Config::getParallaxFrontB();
-			origDrawBackSprite(a1, frontA, 0x1A000, 0, frontB, 1, 0x10000 | frontSprId, la8);
+				origDrawBackSprite(a1, backA, a3 + 1, la4, backB, 3, 0x10000 | back2SprId, la8);
+				static int frontA = Config::getParallaxFrontA();
+				static int frontB = Config::getParallaxFrontB();
+				origDrawBackSprite(a1, frontA, 0x1A000, 0, frontB, 1, 0x10000 | frontSprId, la8);
+			}
 		}
 	}
 	return ret;
 }
 
 DWORD addrCheckIfFileExistsInVFS;
-int Sprites::callCheckIfFileExistsInVFS(char * filename, DWORD vfs) {
+int Sprites::callCheckIfFileExistsInVFS(const char * filename, DWORD vfs) {
 	int reta;
 
 	_asm push vfs

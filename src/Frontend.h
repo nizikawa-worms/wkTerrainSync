@@ -19,7 +19,7 @@ public:
 	static std::pair<int, int> scalePosition(int x, int y, int realWidth, int realHeight);
 	static int scaleSize(int value, int realWidth, int realHeight);
 
-	static int callMessageBox(char * message, int a2, int a3);
+	static int callMessageBox(const char * message, int a2, int a3);
 	static void install();
 };
 

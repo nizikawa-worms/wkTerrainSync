@@ -36,8 +36,8 @@ void __stdcall Frontend::hookChangeScreen(int screen) {
 	_asm call origChangeScreen
 }
 
-int (__stdcall * origFrontendMessageBox)(char * message, int a2, int a3);
-int Frontend::callMessageBox(char * message, int a2, int a3) {
+int (__stdcall * origFrontendMessageBox)(const char * message, int a2, int a3);
+int Frontend::callMessageBox(const char * message, int a2, int a3) {
 	if(!Config::isMessageBoxEnabled()) return 0;
 	return origFrontendMessageBox(message, a2, a3);
 }
@@ -73,7 +73,7 @@ int Frontend::setupComboBox(CWnd * box) {
 void Frontend::install() {
 	DWORD addrFrontendChangeScreen = Hooks::scanPattern("FrontendChangeScreen", "\x83\x3D\x00\x00\x00\x00\x00\x53\x8B\x5C\x24\x08\x75\x14\x8B\x46\x3C\xA8\x18\x74\x59\x83\xE0\xEF\x89\x5E\x44\x89\x46\x3C\x5B\xC2\x04\x00\x6A\x00\x8B\xCE\xE8\x00\x00\x00\x00\x8B\x86\x00\x00\x00\x00\x50\x8B\x86\x00\x00\x00\x00\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x33\xC0\x57", "???????xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx????xx????xxx????x????x????xxx");
 	origFrontendMessageBox =
-			(int (__stdcall *)(char *,int,int))
+			(int (__stdcall *)(const char *,int,int))
 			Hooks::scanPattern("FrontendMessageBox", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x83\x3D\x00\x00\x00\x00\x00", "??????xxx????xx????xxxx????xx????x????xx?????");
 
 	origAfxSetupComboBox =

@@ -1,3 +1,5 @@
+https://github.com/rafzi/hacklib
+
 ## License ##
 
 Free to use for any purpose. Don't claim you wrote the code or modified versions. If you release code or binaries give credit and link to this repository.

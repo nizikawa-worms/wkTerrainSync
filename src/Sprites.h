@@ -68,8 +68,8 @@ public:
 private:
 	static inline int customFillColor = 0;
 
-	static DWORD __fastcall hookLoadSpriteFromVFS(DWORD DD_Display, int EDX, int palette, int index, int a4, int vfs_a5, char *filename);
-	static DWORD __fastcall hookLoadSpriteFromTerrain(DWORD DDDisplay, DWORD edx, int palette_num_a2, int sprite_id_a3, int vfs_a4, char *filename);
+	static DWORD __fastcall hookLoadSpriteFromVFS(DWORD DD_Display, int EDX, int palette, int index, int a4, int vfs_a5, const char *filename);
+	static DWORD __fastcall hookLoadSpriteFromTerrain(DWORD DDDisplay, DWORD edx, int palette_num_a2, int sprite_id_a3, int vfs_a4, const char *filename);
 	static int __fastcall hookDrawBackSprite(int *a1, int a2, int a3, int a4, int a5, int a6, int sprite_a7, int a8);
 
 public:
@@ -77,7 +77,7 @@ public:
 
 	static int getCustomFillColor();
 	static void setCustomFillColor(int customFillColor);
-	static int callCheckIfFileExistsInVFS(char * filename, DWORD vfs);
+	static int callCheckIfFileExistsInVFS(const char * filename, DWORD vfs);
 };
 
 

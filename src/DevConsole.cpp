@@ -7,9 +7,10 @@
 #include <io.h>
 #include <iostream>
 #include <fstream>
+#include "Config.h"
 
 void DevConsole::install() {
-	AllocConsole();
+	if(!AllocConsole()) return;
 	SetConsoleTitle(Config::getFullStr().c_str());
 
 	//resize console

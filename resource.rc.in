@@ -1,7 +1,7 @@
 
 1 VERSIONINFO
-FILEVERSION 1,1,0,0
-PRODUCTVERSION 1,1,0,0
+FILEVERSION 1,1,0,2
+PRODUCTVERSION 1,1,0,2
 FILEOS 0x4
 FILETYPE 0x1
 {
@@ -12,12 +12,12 @@ BLOCK "StringFileInfo"
 		VALUE "Comments", ""
 		VALUE "CompanyName", "Nizikawa"
 		VALUE "FileDescription", "wkTerrain with automatic data synchronization and extra customization"
-		VALUE "FileVersion", "1.1.0.0"
-		VALUE "InternalName", "wkTerrainSync v1.1.0a"
+		VALUE "FileVersion", "1.1.0.2"
+		VALUE "InternalName", "wkTerrainSync v1.1.0b"
 		VALUE "LegalCopyright", "Nizikawa"
 		VALUE "OriginalFilename", "wkTerrainSync.dll"
-		VALUE "ProductName", "wkTerrainSync v1.1.0a"
-		VALUE "ProductVersion", "1.1.0.0"
+		VALUE "ProductName", "wkTerrainSync v1.1.0b"
+		VALUE "ProductVersion", "1.1.0.2"
 	}
 }
 

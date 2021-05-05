@@ -24,6 +24,9 @@ private:
 	static inline bool showInstalledTerrains = false;
 	static inline bool superFrontendThumbnailFix = true;
 	static inline bool printMapScaleInChat = true;
+	static inline bool customWaterAllowed = true;
+	static inline bool spriteOverrideAllowed = true;
+	static inline bool additionalParallaxLayersAllowed = true;
 
 public:
 	static bool isNagMessageEnabled();
@@ -77,6 +80,9 @@ public:
 	static bool isSuperFrontendThumbnailFix();
 
 	static bool isPrintMapScaleInChat();
+	static bool isCustomWaterAllowed();
+	static bool isSpriteOverrideAllowed();
+	static bool isAdditionalParallaxLayersAllowed();
 };
 
 

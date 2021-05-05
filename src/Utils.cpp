@@ -10,7 +10,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-void Utils::hexDump(char *desc, void *addr, int len) {
+void Utils::hexDump(const char *desc, const void *addr, int len) {
 	int i;
 	unsigned char buff[17];
 	unsigned char *pc = (unsigned char*)addr;
@@ -55,7 +55,7 @@ void Utils::hexDump(char *desc, void *addr, int len) {
 	printf("  %s\n", buff);
 }
 
-void Utils::tokenize(std::string & str, char* delim, std::vector<std::string> &out) {
+void Utils::tokenize(std::string & str, const char* delim, std::vector<std::string> &out) {
 	char *token = strtok(const_cast<char*>(str.c_str()), delim);
 	while (token != nullptr) {
 		auto temp = std::string(token);
@@ -65,7 +65,7 @@ void Utils::tokenize(std::string & str, char* delim, std::vector<std::string> &o
 	}
 }
 
-void Utils::tokenizeSet(std::string & str, char* delim, std::set<std::string> &out) {
+void Utils::tokenizeSet(std::string & str, const char* delim, std::set<std::string> &out) {
 	char *token = strtok(const_cast<char*>(str.c_str()), delim);
 	while (token != nullptr) {
 		auto temp = std::string(token);

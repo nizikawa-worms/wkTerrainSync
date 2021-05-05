@@ -9,6 +9,10 @@ void Config::readConfig() {
 
 	downloadAllowed = GetPrivateProfileIntA("general", "AllowTerrainDownload", 1, iniFile.c_str());
 	uploadAllowed = GetPrivateProfileIntA("general", "AllowTerrainUpload", 1, iniFile.c_str());
+	customWaterAllowed = GetPrivateProfileIntA("general", "AllowCustomWater", 1, iniFile.c_str());
+	spriteOverrideAllowed = GetPrivateProfileIntA("general", "AllowCustomSprites", 1, iniFile.c_str());
+	additionalParallaxLayersAllowed = GetPrivateProfileIntA("general", "AllowAdditionalParallaxLayers", 1, iniFile.c_str());
+
 	ignoreVersionCheck = GetPrivateProfileIntA("general", "IgnoreVersionCheck", 0, iniFile.c_str());
 
 	greentextEnabled = GetPrivateProfileIntA("general", "EnableLobbyGreentext", 1, iniFile.c_str());
@@ -22,7 +26,7 @@ void Config::readConfig() {
 	parallaxBackA = GetPrivateProfileIntA("parallax", "parallaxBackA", 9011200, iniFile.c_str());
 	parallaxBackB = GetPrivateProfileIntA("parallax", "parallaxBackB", 42172416, iniFile.c_str());
 	parallaxFrontA = GetPrivateProfileIntA("parallax", "parallaxFrontA", 65536, iniFile.c_str());
-	parallaxFrontB = GetPrivateProfileIntA("parallax", "parallaxBackB", 48003809, iniFile.c_str());
+	parallaxFrontB = GetPrivateProfileIntA("parallax", "parallaxFrontB", 48003809, iniFile.c_str());
 	parallaxHideOnBigMaps = GetPrivateProfileIntA("parallax", "HideOnBigMaps", 1, iniFile.c_str());
 
 	devConsoleEnabled = GetPrivateProfileIntA("debug", "EnableDevConsole", 1, iniFile.c_str());
@@ -127,7 +131,7 @@ std::string Config::getModuleStr() {
 	return "wkTerrainSync";
 }
 std::string Config::getVersionStr() {
-	return "v1.1.0a";
+	return "v1.1.0b";
 }
 
 std::string Config::getBuildStr() {
@@ -196,4 +200,16 @@ bool Config::isSuperFrontendThumbnailFix() {
 
 bool Config::isPrintMapScaleInChat() {
 	return printMapScaleInChat;
+}
+
+bool Config::isCustomWaterAllowed() {
+	return customWaterAllowed;
+}
+
+bool Config::isSpriteOverrideAllowed() {
+	return spriteOverrideAllowed;
+}
+
+bool Config::isAdditionalParallaxLayersAllowed() {
+	return additionalParallaxLayersAllowed;
 }
