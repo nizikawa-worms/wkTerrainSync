@@ -2,9 +2,16 @@
 #include <windows.h>
 #include "Config.h"
 #include "Utils.h"
+#include "WaLibc.h"
+#include <filesystem>
 
+namespace fs = std::filesystem;
 
 void Config::readConfig() {
+	char wabuff[MAX_PATH];
+	GetModuleFileNameA(0, (LPSTR)&wabuff, sizeof(wabuff));
+	waDir = fs::path(wabuff).parent_path();
+
 	moduleEnabled = GetPrivateProfileIntA("general", "EnableModule", 1, iniFile.c_str());
 
 	downloadAllowed = GetPrivateProfileIntA("general", "AllowTerrainDownload", 1, iniFile.c_str());
@@ -33,6 +40,10 @@ void Config::readConfig() {
 	hexDumpPackets = GetPrivateProfileIntA("debug", "HexDumpPackets", 0, iniFile.c_str());
 
 	superFrontendThumbnailFix = GetPrivateProfileIntA("fixes", "SuperFrontendFixMapThumbnail", 1, iniFile.c_str());
+	dontRenameSchemeComboBox = GetPrivateProfileIntA("fixes", "DontRenameSchemeComboBox", 0, iniFile.c_str());
+
+	dontCreateMissionDirs = GetPrivateProfileIntA("fixes", "DontCreateMissionDirs", 0, iniFile.c_str());
+	dontConvertMissionFiles = GetPrivateProfileIntA("fixes", "DontConvertMissionFiles", 0, iniFile.c_str());
 
 	char buff[2048];
 	GetPrivateProfileStringA("exceptions", "ExtendedBackSprLoader", "e27d433fcd8ac2e696f01437525f34c5,", buff, sizeof(buff), iniFile.c_str());
@@ -125,13 +136,14 @@ void Config::addVersionInfoToJson(nlohmann::json & json) {
 	json["module"] = getModuleStr();
 	json["version"] = getVersionStr();
 	json["build"] = getBuildStr();
+	json["protocol"] = getProtocolVersion();
 }
 
 std::string Config::getModuleStr() {
 	return "wkTerrainSync";
 }
 std::string Config::getVersionStr() {
-	return "v1.1.0b";
+	return "v1.2.0";
 }
 
 std::string Config::getBuildStr() {
@@ -212,4 +224,42 @@ bool Config::isSpriteOverrideAllowed() {
 
 bool Config::isAdditionalParallaxLayersAllowed() {
 	return additionalParallaxLayersAllowed;
+}
+
+bool Config::isDontRenameSchemeComboBox() {
+	return dontRenameSchemeComboBox;
+}
+
+const std::filesystem::path &Config::getWaDir() {
+	return waDir;
+}
+
+int Config::getProtocolVersion() {
+	return 0;
+}
+
+
+bool Config::isDontCreateMissionDirs() {
+	return dontCreateMissionDirs;
+}
+
+bool Config::isDontConvertMissionFiles() {
+	return dontConvertMissionFiles;
+}
+
+int Config::getModuleInitialized() {
+	return moduleInitialized;
+}
+
+void Config::setModuleInitialized(int moduleInitialized) {
+	Config::moduleInitialized = moduleInitialized;
+	if(moduleInitialized) {
+		for(auto & cb : moduleInitializedCallbacks) {
+			cb();
+		}
+	}
+}
+
+void Config::registerModuleInitializedCallback(void(__stdcall * callback)()) {
+	moduleInitializedCallbacks.push_back(callback);
 }

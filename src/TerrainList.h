@@ -5,6 +5,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <json.hpp>
 
 typedef unsigned long       DWORD;
 
@@ -67,6 +68,8 @@ public:
 	static bool setLastTerrainInfoById(int newTerrain);
 	static bool setLastTerrainInfoByHash(std::string md5);
 	static void onFrontendExit();
+	static void onLoadReplay(nlohmann::json & config);
+	static void onCreateReplay(nlohmann::json &);
 };
 
 

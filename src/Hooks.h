@@ -32,6 +32,9 @@ public:
 	static void patchAsm(DWORD addr, unsigned char *op, size_t opsize);
 
 	static DWORD scanPattern(const char* name, const char* pattern, const char* mask, DWORD expected = 0);
+
+	static const std::map<std::string, DWORD> &getScanNameToAddr();
+
 };
 
 

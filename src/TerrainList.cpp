@@ -14,8 +14,10 @@
 #include "LobbyChat.h"
 #include "Config.h"
 #include "MapGenerator.h"
+#include "Utils.h"
+#include "Missions.h"
 
-char *(__stdcall *getDataPath)(char **buffer);
+
 
 namespace fs = std::filesystem;
 DWORD (__stdcall *origTerrain0)(int a1, char* a2, char a3);
@@ -27,10 +29,10 @@ DWORD __stdcall TerrainList::hookTerrain0(int a1, char *a2, char a3) {
 		setLastTerrainInfoById(terrain);
 	}
 
-	char * inputReplayPath = (char*)(W2App::getAddrGameinfoObject() + 0xDB60);
-	if(inputReplayPath && strlen(inputReplayPath)) {
-		Replay::loadTerrainInfo(inputReplayPath);
-	}
+//	char * inputReplayPath = (char*)(W2App::getAddrGameinfoObject() + 0xDB60);
+//	if(inputReplayPath && strlen(inputReplayPath)) {
+//		Replay::loadTerrainInfo(inputReplayPath);
+//	}
 
 	auto v32 = *(DWORD *)(a1 + 1348);
 	int maxId = maxTerrain;
@@ -59,8 +61,7 @@ DWORD __stdcall TerrainList::hookTerrain0(int a1, char *a2, char a3) {
 char * (__fastcall *origTerrain2)(int a1);
 char * __fastcall TerrainList::hookTerrain2(int id) {
 	static char buff[MAX_PATH];
-	char * pathPtr;
-	getDataPath(&pathPtr);
+	std::string datapath = WaLibc::getWaDataPath();
 	if(id > maxTerrain) {
 		if(!lastTerrainInfo.dirname.empty()) {
 			sprintf_s(buff, "%s%s", terrainDir.c_str(), lastTerrainInfo.dirname.c_str());
@@ -68,16 +69,16 @@ char * __fastcall TerrainList::hookTerrain2(int id) {
 			return buff;
 		} else {
 			printf("hookTerrain2: Magic terrainId specified, but lastTerrainInfo is null\n");
-			sprintf_s(buff, "%s\\level\\%s", pathPtr, terrainList[0].c_str()); // load first terrain instead of crashing
+			sprintf_s(buff, "%s\\level\\%s", datapath.c_str(), terrainList[0].c_str()); // load first terrain instead of crashing
 			return buff;
 		}
 	} else {
 		if(id < 0 || id > terrainList.size()) {
 			printf("hookTerrain2: Invalid terrain id %d (0x%X)\n", id, id);
-			sprintf_s(buff, "%s\\level\\%s", pathPtr, terrainList[0].c_str()); //// load first terrain instead of crashing
+			sprintf_s(buff, "%s\\level\\%s", datapath.c_str(), terrainList[0].c_str()); //// load first terrain instead of crashing
 			return buff;
 		}
-		sprintf_s(buff, "%s\\level\\%s", pathPtr, terrainList[id].c_str());
+		sprintf_s(buff, "%s\\level\\%s", datapath.c_str(), terrainList[id].c_str());
 //		printf("hookTerrain2: %d -> %s\n", id, buff);
 		return buff;
 	}
@@ -111,7 +112,7 @@ void __stdcall TerrainList::hookWriteMapThumbnail(int a1) {
 			flags |= MapGenerator::extraBits::f_DecorHell;
 		}
 		MapGenerator::setFlagExtraFeatures(flags);
-
+		Missions::onMapReset();
 		*terrainId = newTerrain;
 		setLastTerrainInfoById(newTerrain);
 
@@ -132,8 +133,7 @@ DWORD __stdcall TerrainList::hookTerrain3(int a1, char *a2, char *a3) {
 
 	size_t count = 0;
 	auto v6 = (DWORD**)(a1 + 1684);
-	char * pathPtr;
-	getDataPath(&pathPtr);
+	std::string datapath = WaLibc::getWaDataPath();
 
 	for(int i = 0 ; i < terrainList.size(); i++) {
 		auto buff = (char*)WaLibc::waMalloc(0x100);
@@ -142,7 +142,7 @@ DWORD __stdcall TerrainList::hookTerrain3(int a1, char *a2, char *a3) {
 		// code for CD edition compatibility
 		char buff2[MAX_PATH];
 		if(i <= maxTerrain)
-			sprintf_s(buff2, "%s\\%s%s\\text.img", pathPtr, a2, terrainList[i].c_str());
+			sprintf_s(buff2, "%s\\%s%s\\text.img", datapath.c_str(), a2, terrainList[i].c_str());
 		else
 			sprintf_s(buff2, 0x100, "data\\%s%s\\text.img", a2, terrainList[i].c_str());
 		DWORD v7;
@@ -249,24 +249,13 @@ void TerrainList::rescanTerrains() {
 	patchTerrain4();
 }
 
-std::optional<std::string> readFile(std::string path) {
-	std::ifstream in(path, std::ios::binary);
-	if (in.good()) {
-		std::stringstream buffer;
-		buffer << in.rdbuf();
-		in.close();
-		return {buffer.str()};
-	}
-	return {};
-}
-
 std::string TerrainList::computeTerrainHash(std::string dirname) {
 	Chocobo1::MD5 md5;
-	auto level = readFile(terrainDir + dirname + "/level.dir");
+	auto level = Utils::readFile(terrainDir + dirname + "/level.dir");
 	if(level) {
 		md5.addData((*level).c_str(), (*level).size());
 	}
-	auto water = readFile(terrainDir + dirname + "/water.dir");
+	auto water = Utils::readFile(terrainDir + dirname + "/water.dir");
 	if(water)
 		md5.addData((*water).c_str(), (*water).size());
 	md5.finalize();
@@ -327,6 +316,26 @@ void __stdcall TerrainList::hookMapTypeChecks() {
 	_asm call origMapTypeChecks
 }
 
+void TerrainList::onLoadReplay(nlohmann::json &json) {
+	if(json.contains("hash")) {
+		std::string thash = json["hash"];
+		if(!thash.empty()) {
+			if(!TerrainList::setLastTerrainInfoByHash(json["hash"])) {
+				char buff[2048];
+				sprintf_s(buff, "This replay file was recorded using a custom terrain which is currently not installed in your WA directory.\nYou will need to obtain the terrain files in order to play this replay.\nSorry about that.\n\nTerrain metadata: %s", json.dump(4).c_str());
+				MessageBoxA(0, buff, Config::getFullStr().c_str(), MB_OK | MB_ICONERROR);
+			}
+		}
+	}
+}
+
+void TerrainList::onCreateReplay(nlohmann::json & json) {
+	if(lastTerrainInfo.hash.empty() && lastTerrainInfo.name.empty()) return;
+	json["name"] = lastTerrainInfo.name;
+	json["hash"] = lastTerrainInfo.hash;
+}
+
+
 void TerrainList::install(){
 	DWORD addrTerrainRandomSeed= Hooks::scanPattern("TerrainRandomSeed", "\x83\xEC\x0C\x80\x7C\x24\x00\x00\x53\x55\x57\x74\x79\x6A\x10\xFF\x15\x00\x00\x00\x00\x66\x85\xC0\x7D\x31\x8B\x86\x00\x00\x00\x00\x8B\x8E\x00\x00\x00\x00\x68\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\x51\xE8\x00\x00\x00\x00", "xxxxxx??xxxxxxxxx????xxxxxxx????xx????x????x????xxx????");
 //	DWORD addrTerrainRandomSeedIdModifier = Hooks::scanPattern("TerrainRandomSeedIdModifier", "\x8B\x02\x83\xF8\x01\x7D\x40\x83\xF9\x1A\x75\x1A\xF7\xD8\x1B\xC0\x83\xE0\xFD\x83\xC0\x01\x89\x02\xC1\xE0\x10\x03\xC1\x8B\x4C\x24\x04\x89\x01\xC2\x04\x00", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
@@ -340,9 +349,6 @@ void TerrainList::install(){
 	addrAddTerrainsOnRebuildWindow = Hooks::scanPattern("AddTerrainsOnRebuildWindow", "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x08\x53\x55\x8B\xD9\x83\xBB\x00\x00\x00\x00\x00\x56\x57\x75\x0B\xA1\x00\x00\x00\x00\x89\x44\x24\x14\xEB\x11\x8B\x8B\x00\x00\x00\x00\x8B\x01\x8B\x40\x18", "??????xxxxxxxxx?????xxxxx????xxxxxxxx????xxxxx");
 
 	DWORD addrMapTypeChecks = Hooks::scanPattern("MapTypeChecks", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\xA1\x00\x00\x00\x00\x8B\x0D\x00\x00\x00\x00", "???????xx????xxxx????xx????x????xx????");
-	getDataPath =
-			(char *(__stdcall *)(char **))
-			Hooks::scanPattern("GetDataPath", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x08\x53\x56\x8B\x74\x24\x20\x33\xDB\x89\x5C\x24\x18\x89\x5C\x24\x0C\xE8\x00\x00\x00\x00\x33\xC9", "???????xx????xxxx????xxxxxxxxxxxxxxxxxxxx????xx");
 
 	DWORD off1 = *(DWORD*)(addrTerrain3 + 0x103);
 	origEditorLoadTextImg = addrTerrain3 + 0x107 + off1;
@@ -363,3 +369,6 @@ void TerrainList::install(){
 void TerrainList::onFrontendExit() {
 	lastTerrainInfo.clear();
 }
+
+
+

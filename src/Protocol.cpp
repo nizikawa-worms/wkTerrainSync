@@ -6,12 +6,14 @@
 #include "Packets.h"
 #include "Frontend.h"
 #include "LobbyChat.h"
+#include "Missions.h"
 #include <iostream>
 #include <filesystem>
 #include <optional>
 #include <fstream>
 #include <sstream>
 #include <Base64.h>
+#include "Utils.h"
 
 namespace fs = std::filesystem;
 typedef unsigned char byte;
@@ -49,11 +51,10 @@ void Protocol::parseMsgHost(DWORD hostThis, std::string data, int slot) {
 		std::string mType = parsed["type"];
 		std::string module = parsed["module"];
 		if(module == Config::getModuleStr()) {
-			if (mType == "TerrainRequest") {
-				handleTerrainRequest(hostThis, parsed, slot);
-			} else {
-				throw std::runtime_error("Unknown protocol message type: " + mType);
-			}
+			if (mType == "TerrainRequest") {handleTerrainRequest(hostThis, parsed, slot);}
+			else if(mType == "VersionQuery") { sendVersionInfoSlot(parsed, slot);}
+			else if(mType == "VersionInfo") { showVersionInfoSlot(parsed, slot);}
+			else throw std::runtime_error("Unknown protocol message type: " + mType + " - if you see this error you probably have an outdated version of wkTerrainSync");
 		}
 	} catch(std::exception & e) {
 		char buff[1024];
@@ -71,41 +72,15 @@ void Protocol::parseMsgClient(std::string data, DWORD connection) {
 		std::string mType = parsed["type"];
 		std::string module = parsed["module"];
 		if(module == Config::getModuleStr()) {
-			if (mType == "TerrainInfo") {
-				printf("Received TerrainInfo packet: %s\n", data.c_str());
-				std::string thash = parsed["hash"];
-				if(thash.empty()) {
-					throw std::runtime_error("Received TerrainInfo with empty hash. This is a bug. Data: " + data);
-				}
-				if (!TerrainList::setLastTerrainInfoByHash(thash)) {
-					char buff[512];
-					if (Config::isDownloadAllowed()) {
-
-						if(requestedHashes.find(thash) == requestedHashes.end()) {
-							requestedHashes.insert(thash);
-							printf("Requesting terrain files!\n");
-							sprintf_s(buff, "Requesting terrain files from host. Terrain: %s hash: %s", std::string(parsed["name"]).c_str(), std::string(parsed["hash"]).c_str());
-							LobbyChat::lobbyPrint(buff);
-							nlohmann::json response;
-							response["type"] = "TerrainRequest";
-							response["terrainHash"] = parsed["hash"];
-							Config::addVersionInfoToJson(response);
-							Packets::sendDataToHost(response.dump());
-						}
-					} else {
-						printf("Terrain file is missing, but terrain download is disabled in .ini\n");
-						sprintf_s(buff, "The terrain file is missing: %s hash: %s installed, but terrain download is disabled in .ini", std::string(parsed["name"]).c_str(), std::string(parsed["hash"]).c_str());
-						LobbyChat::lobbyPrint(buff);
-					}
-				}
-			} else if (mType == "TerrainChunk") {
-				handleTerrainChunk(parsed);
-			} else if (mType == "RescanTerrains") {
-//				LobbyChat::lobbyPrint("Rescanning terrain files...");
-				TerrainList::rescanTerrains();
-			} else {
-				throw std::runtime_error("Unknown protocol message type: " + mType);
-			}
+			if(mType == "TerrainChunk") {handleTerrainChunk(parsed);}
+			else if(mType == "TerrainInfo") {handleTerrainInfo(data, parsed);}
+			else if(mType == "RescanTerrains") {TerrainList::rescanTerrains();}
+			else if(mType == "WamChunk") {handleWamChunk(parsed);}
+			else if(mType == "WamReset") {Missions::resetCurrentWam();}
+			else if(mType == "WamAttempt") {Missions::setWamAttemptNumber(parsed["WamAttempt"]);}
+			else if(mType == "VersionQuery") { sendVersionInfoConnection(parsed, connection);}
+			else if(mType == "VersionInfo") { showVersionInfoConnection(parsed, connection);}
+			else throw std::runtime_error("Unknown protocol message type: " + mType + " - if you see this error you probably have an outdated version of wkTerrainSync");
 		}
 	} catch(std::exception & e) {
 		char buff[1024];
@@ -116,10 +91,35 @@ void Protocol::parseMsgClient(std::string data, DWORD connection) {
 	}
 }
 
+void Protocol::handleTerrainInfo(const std::string & data, const nlohmann::json &parsed) {
+	printf("Received TerrainInfo packet: %s\n", data.c_str());
+	std::string thash = parsed["hash"];
+	if(thash.empty()) {
+		throw std::runtime_error("Received TerrainInfo with empty hash. This is a bug. Data: " + data);
+	}
+	if (!TerrainList::setLastTerrainInfoByHash(thash)) {
+		char buff[512];
+		if (Config::isDownloadAllowed()) {
 
-void stripNonAlphaNum(std::string & s) {
-	s.erase(std::remove_if(s.begin(), s.end(), []( auto const& c ) -> bool { return !std::isalnum(c); } ), s.end());
+			if(requestedHashes.find(thash) == requestedHashes.end()) {
+				requestedHashes.insert(thash);
+				printf("Requesting terrain files!\n");
+				sprintf_s(buff, "Requesting terrain files from host. Terrain: %s hash: %s", std::string(parsed["name"]).c_str(), std::string(parsed["hash"]).c_str());
+				LobbyChat::lobbyPrint(buff);
+				nlohmann::json response;
+				response["type"] = "TerrainRequest";
+				response["terrainHash"] = parsed["hash"];
+				Config::addVersionInfoToJson(response);
+				Packets::sendDataToHost(response.dump());
+			}
+		} else {
+			printf("Terrain file is missing, but terrain download is disabled in .ini\n");
+			sprintf_s(buff, "The terrain file is missing: %s hash: %s installed, but terrain download is disabled in .ini", std::string(parsed["name"]).c_str(), std::string(parsed["hash"]).c_str());
+			LobbyChat::lobbyPrint(buff);
+		}
+	}
 }
+
 
 void Protocol::handleTerrainRequest(DWORD hostThis, nlohmann::json & parsed, int slot) {
 	printf("Parsing terrain request\n");
@@ -190,9 +190,7 @@ void Protocol::sendFile(int slot, std::string path, std::string filetype, nlohma
 		Config::setUploadAllowed(false);
 		throw std::runtime_error("Failed to read terrain file - disabling upload functionality. File path: " + path);
 	}
-
 }
-
 
 void Protocol::handleTerrainChunk(nlohmann::json & parsed) {
 	if(!Config::isDownloadAllowed())
@@ -235,10 +233,10 @@ void Protocol::handleTerrainChunk(nlohmann::json & parsed) {
 
 
 	std::string terrainName = parsed["terrainName"];
-	stripNonAlphaNum(terrainName);
+	Utils::stripNonAlphaNum(terrainName);
 
 	std::string terrainHash = parsed["terrainHash"];
-	stripNonAlphaNum(terrainHash);
+	Utils::stripNonAlphaNum(terrainHash);
 
 	auto & customTerrains = TerrainList::getCustomTerrains();
 	if(customTerrains.find(terrainHash) != customTerrains.end())
@@ -282,4 +280,143 @@ void Protocol::handleTerrainChunk(nlohmann::json & parsed) {
 	}
 
 //	printf("Written chunk to: %s\n", path.c_str());
+}
+
+
+void Protocol::sendWam(DWORD connection) {
+	auto & wam = Missions::getWamContents();
+	if(wam.empty()) return;
+
+	printf("Sending WAM to connection: 0x%X\n", connection);
+	nlohmann::json json;
+	json["type"] = "WamChunk";
+	json["fileSize"] = wam.size();;
+	Config::addVersionInfoToJson(json);
+
+	for (size_t i = 0; i < wam.size(); i += chunkSizeLimit) {
+		if(i == 0) json["WamAttempt"] = Missions::getWamAttemptNumber();
+		auto part = wam.substr(i, chunkSizeLimit);
+		json["chunkOffset"] = i;
+		json["chunkData"] = macaron::Base64::Encode(part);
+		Packets::sendDataToClient_connection(connection, json.dump());
+	}
+	Packets::sendMessage(connection, "SYS::ALL:" + Missions::getWamDescription());
+	Packets::sendNagMessage(connection, LobbyChat::getMissionNagMessage());
+}
+
+
+void Protocol::handleWamChunk(nlohmann::json & parsed) {
+	size_t fileSize = parsed["fileSize"];
+	if (fileSize > maxWamSize)
+		throw std::runtime_error("handleWamChunk: specified file size: " + std::to_string(fileSize) + " exceeds allowed limit: " + std::to_string(maxWamSize));
+
+	size_t chunkOffset = parsed["chunkOffset"];
+	std::string chunkData;
+	macaron::Base64::Decode(parsed["chunkData"], chunkData);
+	if (chunkOffset + chunkData.size() > fileSize || wamContents.size() + chunkData.size() > fileSize)
+		throw std::runtime_error("handleWamChunk: chunkOffset: " + std::to_string(chunkOffset) + " chunkSize: " + std::to_string(chunkData.size()) + " excceds fileSize: " + std::to_string(fileSize));
+
+	if(chunkOffset == 0) {
+		wamContents.clear();
+		if(parsed.contains("WamAttempt")) {
+			Missions::setWamAttemptNumber(parsed["WamAttempt"]);
+		}
+	}
+	wamContents += chunkData;
+	if(chunkOffset + chunkData.size() == fileSize) {
+		printf("WAM download complete.\n");
+		static const int magiclen = 8;
+		if(wamContents.length() > magiclen) {
+			for(int i=0; i < magiclen; i++) {
+				unsigned char c = wamContents[i];
+				if(!std::isprint(c) && !std::isspace(c)) {
+					wamContents.clear();
+					throw std::runtime_error("Received a .WAM file with binary characters in header");
+				}
+			}
+		}
+		Missions::setWamContents(wamContents);
+		wamContents.clear();
+		LobbyChat::lobbyPrint((char*)"Received WAM mission data!");
+	}
+}
+
+void Protocol::sendResetWamToAllPlayers() {
+	DWORD hostThis = LobbyChat::getLobbyHostScreen();
+	if(!hostThis) {
+		printf("sendResetWamToAllPlayers - hostThis is null\n");
+		return;
+	}
+	nlohmann::json json;
+	json["type"] = "WamReset";
+	Config::addVersionInfoToJson(json);
+	std::string dump = json.dump();
+	for(int i=0; i < Packets::numSlots; i++) {
+		Packets::sendDataToClient_slot(i, dump);
+	}
+}
+
+void Protocol::sendWamAttemptsToAllPlayers(int attempts) {
+	DWORD hostThis = LobbyChat::getLobbyHostScreen();
+	if(!hostThis) {
+		printf("sendResetWamToAllPlayers - hostThis is null\n");
+		return;
+	}
+	nlohmann::json json;
+	json["type"] = "WamAttempt";
+	json["WamAttempt"] = attempts;
+	Config::addVersionInfoToJson(json);
+	std::string dump = json.dump();
+	for(int i=0; i < Packets::numSlots; i++) {
+		Packets::sendDataToClient_slot(i, dump);
+	}
+}
+
+void Protocol::sendVersionInfoConnection(nlohmann::json &parsed, DWORD connection) {
+	nlohmann::json json;
+	json["type"] = "VersionInfo";
+	Config::addVersionInfoToJson(json);
+	Packets::sendDataToHost(json.dump());
+}
+
+void Protocol::showVersionInfoConnection(nlohmann::json &parsed, DWORD connection) {
+	std::stringstream ss;
+	ss << "The host is using " << parsed["module"] << " " << parsed["version"] << " (" << parsed["build"] << " )";
+	LobbyChat::lobbyPrint((char*)ss.str().c_str());
+}
+
+void Protocol::showVersionInfoSlot(nlohmann::json &parsed, int slot) {
+	std::stringstream ss;
+	std::string nickname = Packets::getNicknameBySlot(slot);
+	ss << nickname << " is using " << parsed["module"] << " " << parsed["version"] << " (" << parsed["build"] << " )";
+	LobbyChat::lobbyPrint((char*)ss.str().c_str());
+}
+
+void Protocol::sendVersionInfoSlot(nlohmann::json &parsed, int slot) {
+	nlohmann::json json;
+	json["type"] = "VersionInfo";
+	Config::addVersionInfoToJson(json);
+	Packets::sendDataToClient_slot(slot, json.dump());
+}
+
+void Protocol::sendVersionQueryToAllPlayers() {
+	DWORD hostThis = LobbyChat::getLobbyHostScreen();
+	if(!hostThis) {
+		printf("sendVersionQueryToAllPlayers - hostThis is null\n");
+		return;
+	}
+	nlohmann::json json;
+	json["type"] = "VersionQuery";
+	Config::addVersionInfoToJson(json);
+	std::string dump = json.dump();
+	for(int i=0; i < Packets::numSlots; i++) {
+		Packets::sendDataToClient_slot(i, dump);
+	}
+}
+
+void Protocol::sendVersionQueryToHost() {
+	nlohmann::json json;
+	json["type"] = "VersionQuery";
+	Config::addVersionInfoToJson(json);
+	Packets::sendDataToHost(json.dump());
 }

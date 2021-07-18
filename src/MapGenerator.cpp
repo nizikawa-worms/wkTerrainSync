@@ -8,6 +8,7 @@
 #include "FrontendDialogs.h"
 #include "Config.h"
 #include "LobbyChat.h"
+#include "Missions.h"
 
 int (__stdcall *origGenerateMapFromParams)(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11, int a12);
 int __stdcall MapGenerator::hookGenerateMapFromParams(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11, int a12) {
@@ -30,6 +31,9 @@ int __stdcall MapGenerator::hookGenerateMapFromParams(int a1, int a2, int a3, in
 	}
 	auto ret = origGenerateMapFromParams(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12);
 	flagResizeBitmap = false;
+	for(auto & cb : onMapResetCallbacks) {
+		cb(0);
+	}
 	return ret;
 }
 
@@ -37,6 +41,9 @@ void MapGenerator::onReseedAndWriteMapThumbnail(int a1) {
 	int * mtype = (int*)(a1 + 0x554);
 	if(scaleXIncrements || scaleYIncrements) {
 		writeMagicMapTypeToThumbnail(mtype);
+	}
+	for(auto & cb : onMapResetCallbacks) {
+		cb(1);
 	}
 }
 
@@ -52,7 +59,7 @@ void MapGenerator::writeMagicMapTypeToThumbnail(int *mtype) {
 		return;
 	}
 
-	FILE * f = fopen("data\\current.thm", "r+b");
+	FILE * f = fopen((Config::getWaDir() / "data/current.thm").string().c_str(), "r+b");
 	if(f) {
 		if(scaleXIncrements || scaleYIncrements) {
 			*mtype = encodeMagicMapType();
@@ -271,6 +278,12 @@ int __stdcall MapGenerator::hookCreateBitThumbnail_patch1_c(int a1, int a2, int 
 	unsigned char * src = (unsigned  char*)(a2);
 	unsigned char * dst = (unsigned  char*)(a3);
 
+//	printf("hookCreateBitThumbnail_patch1_c:\n");
+//	Missions::onMapReset();
+	for(auto & cb : onMapResetCallbacks) {
+		cb(2);
+	}
+
 	short int width = *(short int*)(a2 - 4);
 	short int height = *(short int*)(a2 - 2);
 	if(width == 1920 && height == 696 || strncmp((char*)(a2 - 14), "IMG", 3)) return 0;
@@ -362,6 +375,10 @@ void __declspec(naked) MapGenerator::hookCreateBitThumbnail_patch1() {
 }
 
 int __stdcall MapGenerator::hookW2PrvToEditor_patch1_c(int dst, int src, int width, int height) {
+	Missions::onMapReset();
+	for(auto & cb : onMapResetCallbacks) {
+		cb(3);
+	}
 	if((!scaleXIncrements && !scaleYIncrements) || strncmp((char*)(src - 14), "IMG", 3)) return 0;
 
 	float stepX = (float)getEffectiveWidth() / (float)width;
@@ -424,6 +441,10 @@ int (__stdcall *origExitMapEditor)(int a1);
 int __stdcall MapGenerator::hookExitMapEditor(int a1) {
 	int ret = origExitMapEditor(a1);
 	writeMagicMapTypeToThumbnail(0);
+	Missions::onExitMapEditor();
+	for(auto & cb : onMapEditorExitCallbacks) {
+		cb();
+	}
 	return ret;
 }
 
@@ -538,4 +559,11 @@ void MapGenerator::printCurrentScale() {
 	char buff[256];
 	sprintf_s(buff, "Map scale: %.01f x %.01fx", MapGenerator::getEffectiveScaleX(), MapGenerator::getEffectiveScaleY());
 	LobbyChat::lobbyPrint(buff);
+}
+
+void MapGenerator::registerOnMapResetCallback(void(__stdcall * callback)(int reason)) {
+	onMapResetCallbacks.push_back(callback);
+}
+void MapGenerator::registerOnMapEditorExitCallback(void(__stdcall * callback)()) {
+	onMapEditorExitCallbacks.push_back(callback);
 }

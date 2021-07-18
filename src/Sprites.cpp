@@ -8,10 +8,14 @@
 #include "TerrainList.h"
 #include "MapGenerator.h"
 
-DWORD (__fastcall *origLoadSpriteFromVFS)(DWORD DDdisplay, DWORD EDX, int palette_num_a2, int index_a3, int a4, int vfs_a5, const char *filename_a6);
 
-DWORD (__fastcall *origLoadSpriteFromTerrain)(DWORD DDDisplay, DWORD edx, int a2, int sprite_id_a3, int a4, const char *filename);
 DWORD __fastcall Sprites::hookLoadSpriteFromTerrain(DWORD DDDisplay, DWORD edx, int palette_num_a2, int sprite_id_a3, int vfs_a4, const char *filename) {
+	bool ret = false;
+	for(auto & cb : onLoadSpriteFromTerrainCallbacks) {
+		if(cb(DDDisplay, palette_num_a2, sprite_id_a3, vfs_a4, filename)) ret = true;
+	}
+	if(ret) return 0;
+
 	if(!strcmp(filename, "back.spr")) {
 		auto & backSprExceptions = Config::getBackSprExceptions();
 		auto & lastTerrainInfo = TerrainList::getLastTerrainInfo();
@@ -43,7 +47,7 @@ DWORD overrideSprite(DWORD DD_Display, int palette, int index, int vfs, const ch
 	else
 		sprintf_s(buff, "gfx1\\%s|%s", filename, filename);
 
-	res = (DWORD)origLoadSpriteFromVFS(DD_Display, 0, palette, index, 0, vfs, buff);
+	res = (DWORD)Sprites::origLoadSpriteFromVFS(DD_Display, 0, palette, index, 0, vfs, buff);
 	if(res)
 		printf("Replaced sprite %s (id: %d) with version from terrain dir (%s)\n", filename, index, buff);
 	return res;
@@ -64,6 +68,12 @@ BitmapImage * overrideImg(DWORD DD_Display, DWORD vfs, const char * filename, in
 }
 
 DWORD __fastcall Sprites::hookLoadSpriteFromVFS(DWORD DD_Display, int EDX, int palette, int index, int a4, int vfs_a5, const char *filename) {
+	bool ret = false;
+	for(auto & cb : onLoadSpriteFromVFSCallbacks) {
+		if(cb(DD_Display, palette, index, a4, vfs_a5, filename)) ret = true;
+	}
+	if(ret) return 0;
+
 	auto ddgame = W2App::getAddrDdGame();
 	DWORD res = 0;
 	if(ddgame && Config::isSpriteOverrideAllowed()) {
@@ -155,4 +165,11 @@ int Sprites::getCustomFillColor() {
 
 void Sprites::setCustomFillColor(int customFillColor) {
 	Sprites::customFillColor = customFillColor;
+}
+
+void Sprites::registerOnLoadSpriteFromVFSCallback(int(__stdcall * callback)(DWORD, int, int, int, int, const char*)) {
+	onLoadSpriteFromVFSCallbacks.push_back(callback);
+}
+void Sprites::registerOnLoadSpriteFromTerrainCallback(int(__stdcall * callback)(DWORD, int, int, int,  const char*)) {
+	onLoadSpriteFromTerrainCallbacks.push_back(callback);
 }

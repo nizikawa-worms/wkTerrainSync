@@ -14,6 +14,7 @@ configure_file(
         resource.rc.in
         resource.rc
 )
+add_definitions(-DLIBRARY_EXPORTS)
 
 add_library(wkTerrainSync SHARED
         src/dllmain.cpp
@@ -33,7 +34,9 @@ add_library(wkTerrainSync SHARED
         src/Utils.cpp src/Utils.h
         src/MapGenerator.cpp src/MapGenerator.h
         src/FrontendDialogs.cpp src/FrontendDialogs.h
-
+        src/Missions.cpp src/Missions.h
+        src/Scheme.cpp src/Scheme.h
+        src/Exports.cpp src/Exports.h
         ${CMAKE_CURRENT_BINARY_DIR}/resource.rc
         )
 

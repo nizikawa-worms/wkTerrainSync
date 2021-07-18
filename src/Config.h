@@ -4,6 +4,7 @@
 #include <string>
 #include <json.hpp>
 #include <set>
+#include <filesystem>
 
 class Config {
 public:
@@ -27,6 +28,14 @@ private:
 	static inline bool customWaterAllowed = true;
 	static inline bool spriteOverrideAllowed = true;
 	static inline bool additionalParallaxLayersAllowed = true;
+	static inline bool dontRenameSchemeComboBox = false;
+	static inline bool dontCreateMissionDirs = false;
+	static inline bool dontConvertMissionFiles = false;
+
+	static inline std::filesystem::path waDir;
+
+	static inline std::vector<void(__stdcall *)()> moduleInitializedCallbacks;
+	static inline int moduleInitialized;
 
 public:
 	static bool isNagMessageEnabled();
@@ -59,6 +68,7 @@ public:
 	static std::string getBuildStr();
 	static std::string getModuleStr();
 	static std::string getFullStr();
+	static int getProtocolVersion();
 
 	static int getParallaxFrontA();
 	static int getParallaxFrontB();
@@ -83,6 +93,17 @@ public:
 	static bool isCustomWaterAllowed();
 	static bool isSpriteOverrideAllowed();
 	static bool isAdditionalParallaxLayersAllowed();
+	static bool isDontRenameSchemeComboBox();
+
+	static const std::filesystem::path &getWaDir();
+
+	static bool isDontCreateMissionDirs();
+	static bool isDontConvertMissionFiles();
+
+	static int getModuleInitialized();
+	static void setModuleInitialized(int moduleInitialized);
+
+	static void registerModuleInitializedCallback(void(__stdcall * callback)());
 };
 
 

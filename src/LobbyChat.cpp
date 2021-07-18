@@ -5,6 +5,9 @@
 #include "Packets.h"
 #include <sstream>
 #include "MapGenerator.h"
+#include "Missions.h"
+#include "Utils.h"
+#include "Protocol.h"
 
 void (__fastcall *addrLobbySendGreentext)(const char * msg, void * EDX, void* This, int a3, int a4);
 char * addrMyNickname;
@@ -14,31 +17,106 @@ int __fastcall LobbyChat::hookLobbyClientCommands(void *This, void *EDX, char **
 	std::string args = std::string(argstrptr[0]);
 
 	if(command == "terrains") {
-		std::stringstream ss;
-		ss << addrMyNickname << " is using " << Config::getFullStr();
-		if(Config::isShowInstalledTerrainsEnabled() || args == "list") {
-			ss << "\nInstalled custom terrains: ";
-			for (auto &it : TerrainList::getCustomTerrains()) {
-				auto &terrainInfo = it.second;
-				ss << terrainInfo.name << " (" << terrainInfo.hash.substr(0, 4) << ")   ";
+		if(args.empty() || args == "list") {
+			std::stringstream ss;
+			ss << addrMyNickname << " is using " << Config::getFullStr();
+
+			if((args.empty() && Config::isShowInstalledTerrainsEnabled()) || args == "list") {
+				ss << "\nInstalled custom terrains: ";
+				for (auto &it : TerrainList::getCustomTerrains()) {
+					auto &terrainInfo = it.second;
+					ss << terrainInfo.name << " (" << terrainInfo.hash.substr(0, 4) << ")   ";
+				}
+			}
+			addrLobbySendGreentext(ss.str().c_str(), 0, This, 0, 0);
+		}
+		else if(args == "query") {
+			if(Packets::isHost()) {
+				lobbyPrint((char*)"Sending VersionQuery to all players...");
+				Protocol::sendVersionQueryToAllPlayers();
+			} else if(Packets::isClient()) {
+				lobbyPrint((char*)"Sending VersionQuery to host...");
+				Protocol::sendVersionQueryToHost();
 			}
 		}
-		addrLobbySendGreentext(ss.str().c_str(), 0, This, 0, 0);
+		else if(args == "rescan") {
+			TerrainList::rescanTerrains();
+			lobbyPrint((char*)"Rescanned terrain list");
+		}
 		return 1;
 	}
-	if(command == "scale") {
+	else if(command == "scale") {
 		MapGenerator::printCurrentScale();
 		return 1;
 	}
-	if(command == "help") {
+	else if(command == "help") {
 		lobbyPrint((char*)helpMessage.c_str());
 	}
+	else if(command == "mission") {
+		if(Missions::getWamFlag()) {
+			lobbyPrint((char*)"WAM file is loaded - playing with custom mission");
+		} else {
+			lobbyPrint((char*)"WAM file is NOT loaded - playing normal game");
+		}
+		return 1;
+	}
+
+	bool ret = false;
+	for(auto & cb : clientCommandsCallbacks) {
+		if(cb(command.c_str(), args.c_str())) ret = true;
+	}
+	if(ret) return 1;
 
 	return origLobbyClientCommands(This, EDX, commandstrptr, argstrptr);
 }
 
+int (__fastcall *origLobbyHostCommands)(void *This, void *EDX, char **commandstrptr, char **argstrptr);
+int __fastcall LobbyChat::hookLobbyHostCommands(void *This, void *EDX, char **commandstrptr, char **argstrptr) {
+	std::string command = std::string(commandstrptr[0]);
+	std::string args = std::string(argstrptr[0]);
+
+	if(command == "mission") {
+		if(args.empty()) {
+			if (Missions::getWamFlag()) {
+				lobbyPrint((char*)"WAM file is loaded - playing with custom mission");
+			} else {
+				lobbyPrint((char*)"WAM file is NOT loaded - playing normal game");
+			}
+			return 1;
+		}
+		std::vector<std::string> parts;
+		Utils::tokenize(args, " ", parts);
+		if(parts.size() >= 1) {
+			if(parts[0] == "reset") {
+				Missions::resetCurrentWam();
+				return 1;
+			} else if(parts.size() >= 2 && (parts[0] == "attempt" || parts[0] == "attempts")) {
+				try {
+					int attempts = std::stoi(parts[1]);
+					Missions::setWamAttemptNumber(attempts);
+					Protocol::sendWamAttemptsToAllPlayers(attempts);
+				} catch(std::invalid_argument & e) {
+					lobbyPrint((char*)"Failed to parse command");
+					return 1;
+				}
+				return 1;
+			}
+		}
+	}
+
+	bool ret = false;
+	for(auto & cb : hostCommandsCallbacks) {
+		if(cb(command.c_str(), args.c_str())) ret = true;
+	}
+	if(ret) return 1;
+
+	return origLobbyHostCommands(This, EDX, commandstrptr, argstrptr);
+}
+
+
 int (__stdcall *origConstructLobbyHostScreen)(int a1, int a2);
 int __stdcall LobbyChat::hookConstructLobbyHostScreen(int a1, int a2) {
+	Missions::convertMissionFiles();
 	auto ret = origConstructLobbyHostScreen(a1, a2);
 	lobbyHostScreen = a1;
 	return ret;
@@ -94,14 +172,20 @@ void __fastcall LobbyChat::hookDestructCWnd(int This) {
 
 int (__stdcall *origLobbyDisplayMessage)(int a1, char *msg);
 int __stdcall LobbyChat::hookLobbyDisplayMessage(int a1, char *msg) {
-	if(!strcmp(msg, terrainNagMessage.c_str())) {
-		return 1;
-	}
-	if(!strcmp(msg, bigMapNagMessage.c_str())) {
-		return 1;
+	for(auto & str : {terrainNagMessage, bigMapNagMessage, missionNagMessage}) {
+		if(!strcmp(msg, str.c_str())) return 1;
 	}
 	return origLobbyDisplayMessage(a1, msg);
 }
+
+int (__stdcall *origConstructLobbyOfflineScreen)(DWORD a1);
+int __stdcall LobbyChat::hookConstructLobbyOfflineScreen(DWORD a1) {
+	Missions::convertMissionFiles();
+	auto ret = origConstructLobbyOfflineScreen(a1);
+	lobbyOfflineScreen = a1;
+	return ret;
+}
+
 
 void LobbyChat::lobbyPrint(char * msg) {
 	if(!Config::isGreentextEnabled()) return;
@@ -116,6 +200,8 @@ void LobbyChat::lobbyPrint(char * msg) {
 
 void LobbyChat::install() {
 	DWORD addrLobbyClientCommands = Hooks::scanPattern("LobbyClientCommands", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x40\x53\x56\x8B\x75\x08\x8B\x06\x57\x8B\xD9\x68\x00\x00\x00\x00\x50\x89\x5C\x24\x1C\xE8\x00\x00\x00\x00\x83\xC4\x08\x85\xC0", "??????xxx????xx????xxxx????xxxxxxxxxxxxxx????xxxxxx????xxxxx");
+	DWORD addrLobbyHostCommands = Hooks::scanPattern("LobbyHostCommands", "\x55\x8B\xEC\x83\xE4\xF8\x64\xA1\x00\x00\x00\x00\x6A\xFF\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x56\x8B\x75\x08\x8B\x06\x57\x68\x00\x00\x00\x00\x50\x8B\xF9\xE8\x00\x00\x00\x00\x83\xC4\x08\x85\xC0\x0F\x84\x00\x00\x00\x00\x8B\x06\x68\x00\x00\x00\x00\x50\xE8\x00\x00\x00\x00", "??????xx????xxx????xxxx????xx????xxxxxxxxx????xxxx????xxxxxxx????xxx????xx????");
+
 	addrLobbySendGreentext =
 			(void (__fastcall *)(const char*,void *,void *,int, int))
 					Hooks::scanPattern("LobbySendGreentext", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\x56\x57\x8B\xF1\x68\x00\x00\x00\x00\x8D\x4C\x24\x0C\xE8\x00\x00\x00\x00\x80\x7C\x24\x00\x00", "???????xx????xxxx????xxxxxx????xxxxx????xxx??");
@@ -131,6 +217,8 @@ void LobbyChat::install() {
 
 	DWORD addrDestructCWnd = Hooks::scanPattern("DestructCWnd", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\x53\x56\x57\x8B\xF9\x89\x7C\x24\x0C\xC7\x07\x00\x00\x00\x00\xC7\x44\x24\x00\x00\x00\x00\x00", "???????xx????xxxx????xxxxxxxxxxxx????xxx?????");
 
+	DWORD addrConstructLobbyOfflineScreen = Hooks::scanPattern("ConstructLobbyOfflineScreen", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x24\x55\x8B\x6C\x24\x38\x56\x57\x33\xFF\x57\x68\x00\x00\x00\x00\x55", "???????xx????xxxx????xxxxxxxxxxxxxx????x");
+
 	DWORD * addrLobbyHostScreenVtable = *(DWORD**)(addrConstructLobbyHostScreen + 0x41);
 	DWORD addrDestructLobbyHostScreen = addrLobbyHostScreenVtable[1];
 
@@ -138,7 +226,7 @@ void LobbyChat::install() {
 	DWORD addrDestructLobbyClientScreen = addrLobbyClientScreenVtable[1];
 
 	Hooks::hook("LobbyClientCommands", addrLobbyClientCommands, (DWORD *) &hookLobbyClientCommands, (DWORD *) &origLobbyClientCommands);
-
+	Hooks::hook("LobbyHostCommands", addrLobbyHostCommands, (DWORD *) &hookLobbyHostCommands, (DWORD *) &origLobbyHostCommands);
 	Hooks::hook("ConstructLobbyHostScreen", addrConstructLobbyHostScreen, (DWORD *) &hookConstructLobbyHostScreen, (DWORD *) &origConstructLobbyHostScreen);
 	Hooks::hook("DestructLobbyHostScreen", addrDestructLobbyHostScreen, (DWORD *) &hookDestructLobbyHostScreen, (DWORD *) &origDestructLobbyHostScreen);
 
@@ -153,6 +241,8 @@ void LobbyChat::install() {
 	Hooks::hook("DestructCWnd", addrDestructCWnd, (DWORD *) &hookDestructCWnd, (DWORD *) &origDestructCWnd);
 
 	Hooks::hook("LobbyDisplayMessage", addrLobbyDisplayMessage, (DWORD *) &hookLobbyDisplayMessage, (DWORD *) &origLobbyDisplayMessage);
+
+	Hooks::hook("ConstructLobbyOfflineScreen", addrConstructLobbyOfflineScreen, (DWORD *) &hookConstructLobbyOfflineScreen, (DWORD *) &origConstructLobbyOfflineScreen);
 
 
 
@@ -185,3 +275,35 @@ DWORD LobbyChat::getLobbyClientScreen() {
 const std::string &LobbyChat::getBigMapNagMessage() {
 	return bigMapNagMessage;
 }
+
+const std::string &LobbyChat::getMissionNagMessage() {
+	return missionNagMessage;
+}
+
+void LobbyChat::sendGreentextMessage(std::string msg) {
+	DWORD hostThis = LobbyChat::getLobbyHostScreen();
+	if(hostThis) {
+		addrLobbySendGreentext(msg.c_str(), 0, (void*)hostThis, 0, 0);
+	}
+}
+
+DWORD LobbyChat::getLobbyOfflineScreen() {
+	return lobbyOfflineScreen;
+}
+
+void LobbyChat::onDestructGameGlobal() {
+	lobbyOfflineScreen = 0;
+}
+
+void LobbyChat::onFrontendExit() {
+	lobbyOfflineScreen = 0;
+}
+
+void LobbyChat::registerHostCommandsCallback(int(__stdcall * callback)(const char * command, const char * args)) {
+	hostCommandsCallbacks.push_back(callback);
+}
+
+void LobbyChat::registerClientCommandsCallback(int(__stdcall * callback)(const char * command, const char * args)) {
+	clientCommandsCallbacks.push_back(callback);
+}
+

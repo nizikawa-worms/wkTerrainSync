@@ -18,9 +18,13 @@
 #include "Sprites.h"
 #include "MapGenerator.h"
 #include "FrontendDialogs.h"
+#include "Scheme.h"
+#include "Missions.h"
+#include <chrono>
 
 void install() {
 	srand(time(0) * GetCurrentProcessId());
+	printf("Detected WA installation directory: %s\n", Config::getWaDir().string().c_str());
 	WaLibc::install();
 	TerrainList::install();
 	Packets::install();
@@ -33,22 +37,52 @@ void install() {
 	Sprites::install();
 	MapGenerator::install();
 	FrontendDialogs::install();
+	Scheme::install();
+	Missions::install();
 
+	printf("Hooks installed - processing files...\n");
+	Missions::createMissionDirs();
+	Missions::convertMissionFiles();
 	TerrainList::rescanTerrains();
+
+	Config::setModuleInitialized(1);
+}
+
+// Thanks StepS
+bool LockGlobalInstance(LPCTSTR MutexName)
+{
+	if (!CreateMutex(NULL, 0, MutexName)) return 0;
+	if (GetLastError() == ERROR_ALREADY_EXISTS) return 0;
+	return 1;
+}
+
+char LocalMutexName[MAX_PATH];
+bool LockCurrentInstance(LPCTSTR MutexName)
+{
+	sprintf_s(LocalMutexName, "P%u/%s", GetCurrentProcessId(), MutexName);
+	return LockGlobalInstance(LocalMutexName);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
 	switch(ul_reason_for_call) {
-		case DLL_PROCESS_ATTACH:
+		case DLL_PROCESS_ATTACH: {
+			auto start = std::chrono::high_resolution_clock::now();
+			decltype(start) finish;
 			try {
 				Config::readConfig();
-				if(Config::isModuleEnabled() && Config::waVersionCheck()) {
-					if(Config::isDevConsoleEnabled()) DevConsole::install();
+				if (Config::isModuleEnabled() && Config::waVersionCheck() && LockCurrentInstance("wkTerrainSync")) {
+					if (Config::isDevConsoleEnabled()) DevConsole::install();
 					install();
 				}
-			} catch(std::exception & e) {
+				finish = std::chrono::high_resolution_clock::now();
+			} catch (std::exception &e) {
+				finish = std::chrono::high_resolution_clock::now();
 				MessageBoxA(0, e.what(), Config::getFullStr().c_str(), MB_ICONERROR);
 			}
+			std::chrono::duration<double> elapsed = finish - start;
+			printf("wkTerrainSync startup took %lf seconds\n", elapsed.count());
+		}
+		break;
 		case DLL_THREAD_ATTACH:
 		case DLL_THREAD_DETACH:
 		case DLL_PROCESS_DETACH:

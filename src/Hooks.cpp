@@ -137,3 +137,7 @@ DWORD Hooks::scanPattern(const char *name, const char *pattern, const char* mask
 	return ret;
 }
 
+const std::map<std::string, DWORD> &Hooks::getScanNameToAddr() {
+	return scanNameToAddr;
+}
+

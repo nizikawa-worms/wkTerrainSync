@@ -72,12 +72,21 @@ private:
 	static DWORD __fastcall hookLoadSpriteFromTerrain(DWORD DDDisplay, DWORD edx, int palette_num_a2, int sprite_id_a3, int vfs_a4, const char *filename);
 	static int __fastcall hookDrawBackSprite(int *a1, int a2, int a3, int a4, int a5, int a6, int sprite_a7, int a8);
 
+	static inline std::vector<int(__stdcall *)(DWORD, int, int, int, int, const char*)> onLoadSpriteFromVFSCallbacks;
+	static inline std::vector<int(__stdcall *)(DWORD, int, int, int,  const char*)> onLoadSpriteFromTerrainCallbacks;
+
 public:
 	static int install();
 
 	static int getCustomFillColor();
 	static void setCustomFillColor(int customFillColor);
 	static int callCheckIfFileExistsInVFS(const char * filename, DWORD vfs);
+	static inline DWORD (__fastcall *origLoadSpriteFromVFS)(DWORD DDdisplay, DWORD EDX, int palette_num_a2, int index_a3, int a4, int vfs_a5, const char *filename_a6);
+	static inline DWORD (__fastcall *origLoadSpriteFromTerrain)(DWORD DDDisplay, DWORD edx, int a2, int sprite_id_a3, int a4, const char *filename);
+
+	static void registerOnLoadSpriteFromVFSCallback(int(__stdcall * callback)(DWORD, int, int, int, int, const char*));
+	static void registerOnLoadSpriteFromTerrainCallback(int(__stdcall * callback)(DWORD, int, int, int,  const char*));
+
 };
 
 

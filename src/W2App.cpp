@@ -6,6 +6,7 @@
 #include "LobbyChat.h"
 #include "FrontendDialogs.h"
 #include "MapGenerator.h"
+#include "Missions.h"
 
 DWORD origInitializeW2App;
 DWORD __stdcall W2App::hookInitializeW2App(DWORD DD_Game_a2, DWORD DD_Display_a3, DWORD DS_Sound_a4, DWORD DD_Keyboard_a5, DWORD DD_Mouse_a6, DWORD WAV_CDrom_a7, DWORD WS_GameNet_a8) {
@@ -43,21 +44,34 @@ DWORD __stdcall W2App::hookInitializeW2App(DWORD DD_Game_a2, DWORD DD_Display_a3
 DWORD (__stdcall *origConstructGameGlobal)(int ddgame);
 DWORD __stdcall W2App::hookConstructGameGlobal(DWORD ddgame) {
 	auto ret = origConstructGameGlobal(ddgame);
-	auto addrGameGlobal = *(DWORD*)(ddgame + 0x488);
+	addrGameGlobal = *(DWORD*)(ddgame + 0x488);
 
 	auto fillcolor = Sprites::getCustomFillColor();
 	if(fillcolor) {
 		Sprites::setCustomFillColor(0);
 		*(DWORD*)(addrGameGlobal + 0x7338) = fillcolor;
 	}
+
+	for(auto & cb : constructGameGlobalCallbacks) {
+		cb(ddgame);
+	}
+
 	return ret;
 }
 
 DWORD (__fastcall *origDestroyGameGlobal)(int This, int EDX);
 DWORD __fastcall W2App::hookDestroyGameGlobal(int This, int EDX) {
+	addrGameGlobal = 0;
 	auto ret = origDestroyGameGlobal(This, EDX);
 	addrDDDisplay = addrDSSound = addrDDKeyboard = addrDDMouse = addrWavCDRom = addrWSGameNet = addrDDGame = 0;
 	MapGenerator::resetScale(false);
+	Missions::onDestroyGameGlobal();
+	LobbyChat::onDestructGameGlobal();
+
+	for(auto & cb : destroyGameGlobalCallbacks) {
+		cb();
+	}
+
 	return ret;
 }
 
@@ -109,4 +123,15 @@ DWORD W2App::getAddrGameinfoObject() {
 
 DWORD W2App::getAddrW2Wrapper() {
 	return addrW2Wrapper;
+}
+
+DWORD W2App::getAddrGameGlobal() {
+	return addrGameGlobal;
+}
+
+void W2App::registerConstructGameGlobalCallback(void(__stdcall * callback)(DWORD ddgame)) {
+	constructGameGlobalCallbacks.push_back(callback);
+}
+void W2App::registerDestroyGameGlobalCallback(void(__stdcall * callback)()) {
+	destroyGameGlobalCallbacks.push_back(callback);
 }

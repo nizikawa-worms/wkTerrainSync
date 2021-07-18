@@ -41,6 +41,9 @@ private:
 	static int __stdcall hookW2PrvToEditor_patch1_c(int a1, int a2, int a3, int a4);
 	static void hookW2PrvToEditor_patch1();
 	static int __stdcall hookExitMapEditor(int a1);
+
+	static inline std::vector<void(__stdcall *)(int)> onMapResetCallbacks;
+	static inline std::vector<void(__stdcall *)()> onMapEditorExitCallbacks;
 public:
 
 	static void onTerrainPacket(DWORD This, DWORD EDX, unsigned char * packet, size_t size);
@@ -72,6 +75,9 @@ public:
 	static int getEffectiveHeight(int height=696);
 
 	static void printCurrentScale();
+
+	static void registerOnMapResetCallback(void(__stdcall * callback)(int reason));
+	static void registerOnMapEditorExitCallback(void(__stdcall * callback)());
 };
 
 

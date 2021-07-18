@@ -3,16 +3,18 @@
 #define WKTERRAINSYNC_PACKETS_H
 
 #include <string>
+#include <vector>
 
 typedef unsigned long       DWORD;
 class Packets {
+public:
+	static const int numSlots = 6;
 private:
 	static inline DWORD addrClientSlot;
 	static inline DWORD addrHostSlot;
 	static inline DWORD addrHostUnicast;
 	static inline DWORD addrSendMapData;
 	static inline bool internalFlag = false;
-	static const int numSlots = 6;
 
 	static int __fastcall hookHostLobbyPacketHandler(DWORD This, DWORD EDX, int slot, unsigned char * packet, size_t size);
 	static void __fastcall hookHostEndscreenPacketHandler(DWORD This, DWORD EDX, int slot, unsigned char * packet, size_t size);
@@ -22,11 +24,11 @@ private:
 	static void __stdcall hookSendMapData(int a2);
 	static void __stdcall hookSendColorMapData(DWORD hostThis, int slot);
 
-	static void sendDataToClient_connection(DWORD connection, std::string msg);
-	static void sendTerrainNagMessage(DWORD connection);
-	static void sendBigMapNagMessage(DWORD connection);
-
+	static inline std::vector<int(__stdcall *)(DWORD, int, unsigned char *, size_t)> hostPacketHandlerCallbacks;
+	static inline std::vector<int(__stdcall *)(DWORD, unsigned char *, size_t)> hostInternalPacketHandlerCallbacks;
+	static inline std::vector<int(__stdcall *)(DWORD, unsigned char *, size_t)> clientPacketHandlerCallbacks;
 public:
+	static void sendDataToClient_connection(DWORD connection, std::string msg);
 	static int sendDataToClient_slot(DWORD slot, std::string msg);
 	static void sendDataToHost(std::string msg);
 	static void resendMapDataToClient(DWORD hostThis, DWORD slot);
@@ -41,6 +43,12 @@ public:
 	static std::string getNicknameBySlot(int slot);
 
 	static void fixTerrainId(DWORD This, unsigned char *packet, size_t offset);
+	static void sendNagMessage(DWORD connection, const std::string & message);
+	static void sendMessage(DWORD connection, const std::string & message);
+
+	static void registerHostPacketHandlerCallback(int(__stdcall * callback)(DWORD HostThis, int slot, unsigned char * packet, size_t size));
+	static void registerClientPacketHandlerCallback(int(__stdcall * callback)(DWORD ClientThis, unsigned char * packet, size_t size));
+	static void registerHostInteralPacketHandlerCallback(int(__stdcall * callback)(DWORD Connection, unsigned char * packet, size_t size));
 };
 
 

@@ -6,6 +6,7 @@
 #include "TerrainList.h"
 #include "Config.h"
 #include "MapGenerator.h"
+#include "Missions.h"
 
 Replay::ReplayOffsets Replay::extractReplayOffsets(char * replayName) {
 	ReplayOffsets offsets;
@@ -40,15 +41,20 @@ Replay::ReplayOffsets Replay::extractReplayOffsets(char * replayName) {
 	}
 }
 
-	int (__stdcall *origCreateReplay)(int a1, int a2, __time64_t Time);
-int __stdcall Replay::hookCreateReplay(int a1, int a2, __time64_t Time) {
+	int (__stdcall *origCreateReplay)(int a1, const char* a2, __time64_t Time);
+int __stdcall Replay::hookCreateReplay(int a1, const char* a2, __time64_t Time) {
+	lastTime = Time;
+	if(flagExitEarly) {
+		return 0;
+	}
+
 	auto ret = origCreateReplay(a1, a2, Time);
 
 	char * replayName = (char*)(a1 + 0xDF60);
 	printf("hookCreateReplay: %s\n", replayName);
 
 	auto & lastTerrainInfo = TerrainList::getLastTerrainInfo();
-	if(lastTerrainInfo.hash.empty() && !MapGenerator::getScaleXIncrements() && !MapGenerator::getScaleYIncrements()) {
+	if(lastTerrainInfo.hash.empty() && !MapGenerator::getScaleXIncrements() && !MapGenerator::getScaleYIncrements() && !Missions::getWamFlag()) {
 		printf("Not saving wkterrainsync metadata in replay file\n");
 		return ret;
 	}
@@ -61,12 +67,17 @@ int __stdcall Replay::hookCreateReplay(int a1, int a2, __time64_t Time) {
 			throw std::runtime_error("Failed to open replay file: " + std::string(replayName));
 
 		nlohmann::json js;
-		js["type"] = "TerrainInfo";
-		js["name"] = lastTerrainInfo.name;
-		js["hash"] = lastTerrainInfo.hash;
 		Config::addVersionInfoToJson(js);
+		TerrainList::onCreateReplay(js);
 		MapGenerator::onCreateReplay(js);
-		std::string data = js.dump();
+		Missions::onCreateReplay(js);
+
+		nlohmann::json js2 = nlohmann::json::array({js});
+		std::string data = js2.dump();
+
+		for(auto & cb : createReplayCallbacks) {
+			data = cb(data.c_str());
+		}
 
 		size_t terrainChunkSize = sizeof(size_t) + sizeof(replayMagic) + data.size();
 		size_t newSettingsChunkSize = offsets.settingsChunkSize + terrainChunkSize;
@@ -77,7 +88,7 @@ int __stdcall Replay::hookCreateReplay(int a1, int a2, __time64_t Time) {
 		fwrite(data.c_str(), data.size(), 1, f);
 		fwrite(&terrainChunkSize, sizeof(terrainChunkSize), 1, f);
 		fwrite(&replayMagic, sizeof(replayMagic), 1, f);
-		printf("hookCreateReplay: saved terrain info in replay\n");
+		printf("hookCreateReplay: save wkterrainsync info in replay\n");
 		fclose(f);
 		return ret;
 	} catch(std::exception & e) {
@@ -88,8 +99,16 @@ int __stdcall Replay::hookCreateReplay(int a1, int a2, __time64_t Time) {
 	}
 }
 
-void Replay::loadTerrainInfo(char *replayName) {
-	printf("loadTerrainInfo: %s\n", replayName);
+void Replay::loadInfo(nlohmann::json & json) {
+	if(json.contains("module") && json["module"] == Config::getModuleStr()) {
+		MapGenerator::onLoadReplay(json);
+		Missions::onLoadReplay(json);
+		TerrainList::onLoadReplay(json);
+	}
+}
+
+void Replay::loadReplay(char *replayName) {
+	printf("loadReplay: %s\n", replayName);
 	auto offsets = extractReplayOffsets(replayName);
 	replayPlaybackFlag = true;
 	FILE * f = fopen(replayName, "rb");
@@ -114,33 +133,62 @@ void Replay::loadTerrainInfo(char *replayName) {
 			data[jsonSize] = 0;
 			fread(data, jsonSize, 1, f);
 
-			printf("loadTerrainInfo: Terrain chunk contents: |%s|\n", data);
-			nlohmann::json terrain = nlohmann::json::parse(data);
-			free(data);
-			MapGenerator::onLoadReplay(terrain);
-			std::string thash = terrain["hash"];
-			if(!thash.empty()) {
-				if(!TerrainList::setLastTerrainInfoByHash(terrain["hash"])) {
-					char buff[2048];
-					sprintf_s(buff, "This replay file was recorded using a custom terrain which is currently not installed in your WA directory.\nYou will need to obtain the terrain files in order to play this replay.\nSorry about that.\n\nTerrain metadata: %s", terrain.dump(4).c_str());
-					MessageBoxA(0, buff, Config::getFullStr().c_str(), MB_OK | MB_ICONERROR);
+			printf("loadReplay: Terrain chunk contents: |%s|\n", data);
+			nlohmann::json js = nlohmann::json::parse(data);
+
+			if(js.is_array()) {
+				for(auto & js2 : js) {
+					loadInfo(js2);
 				}
+			} else {
+				loadInfo(js);
 			}
+			for(auto & cb : loadReplayCallbacks) {
+				cb(data);
+			}
+			free(data);
 		}
 		fclose(f);
 	} catch(std::exception & e) {
 		if(f)
 			fclose(f);
-		printf("loadTerrainInfo exception: %s\n", e.what());
+		printf("loadReplay exception: %s\n", e.what());
 	}
 }
 
+int (__stdcall *origLoadReplay)(int a1, int a2);
+int __stdcall Replay::hookLoadReplay(int a1, int a2) {
+//	MessageBoxA(0, "Load replay", "Load replay", 0);
+	char * filename = (char*)(a1 + 0xDB60);
+	printf("hookLoadReplay: 0x%X , 0x%s", a1, filename);
+	loadReplay(filename);
+	return origLoadReplay(a1, a2);
+}
 
 void Replay::install() {
 	DWORD addrCreateReplay =  Hooks::scanPattern("CreateReplay", "\x55\x8B\xEC\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x8B\x5D\x08\x56\x57\x89\x65\xF0\x6A\x00\x68\x00\x00\x00\x00\xC6\x83\x00\x00\x00\x00\x00\xC7\x83\x00\x00\x00\x00\x00\x00\x00\x00", "??????????xx????xxxx????xx????xxxxxxxxxxxx????xx?????xx????????");
+	DWORD addrLoadReplay = Hooks::scanPattern("LoadReplay", "\x55\x8D\x6C\x24\x90\x83\xEC\x70\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x83\x3D\x00\x00\x00\x00\x00\x53\x8B\x5D\x78\x56", "??????xxxxx????xx????xxxx????xx????xx?????xxxxx");
 	Hooks::hook("CreateReplay", addrCreateReplay, (DWORD *) &hookCreateReplay, (DWORD *) &origCreateReplay);
+	Hooks::hook("LoadReplay", addrLoadReplay, (DWORD *) &hookLoadReplay, (DWORD *) &origLoadReplay);
 }
 
 bool Replay::isReplayPlaybackFlag() {
 	return replayPlaybackFlag;
 }
+
+void Replay::setFlagExitEarly(bool flagExitEarly) {
+	Replay::flagExitEarly = flagExitEarly;
+}
+
+__time64_t Replay::getLastTime() {
+	return lastTime;
+}
+
+void Replay::registerLoadReplayCallback(void(__stdcall * callback)(const char * jsonstr)) {
+	loadReplayCallbacks.push_back(callback);
+}
+
+void Replay::registerCreateReplayCallback(const char*(__stdcall * callback)(const char * jsonstr)) {
+	createReplayCallbacks.push_back(callback);
+}
+

@@ -1,5 +1,7 @@
 #include "Utils.h"
 #include <cstdio>
+#include <fstream>
+#include <sstream>
 
 /*
  * Copyright 2018 Dominik Liebler
@@ -73,4 +75,19 @@ void Utils::tokenizeSet(std::string & str, const char* delim, std::set<std::stri
 			out.insert(temp);
 		token = strtok(nullptr, delim);
 	}
+}
+
+std::optional<std::string> Utils::readFile(std::string path) {
+	std::ifstream in(path, std::ios::binary);
+	if (in.good()) {
+		std::stringstream buffer;
+		buffer << in.rdbuf();
+		in.close();
+		return {buffer.str()};
+	}
+	return {};
+}
+
+void Utils::stripNonAlphaNum(std::string & s) {
+	s.erase(std::remove_if(s.begin(), s.end(), []( auto const& c ) -> bool { return !std::isalnum(c); } ), s.end());
 }
