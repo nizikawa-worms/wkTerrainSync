@@ -386,11 +386,13 @@ char* TerrainList::hookGetMapEditorTerrainPath_c(DWORD a1) {
 	_snprintf_s(buff, _TRUNCATE, "%s", info->dirpath.string().c_str());
 	return buff;
 }
+#pragma optimize( "", off )
 char* __stdcall TerrainList::hookGetMapEditorTerrainPath() {
 	DWORD a1;
 	_asm mov a1, eax
 	return hookGetMapEditorTerrainPath_c(a1);
 }
+#pragma optimize( "", on )
 
 char *(__fastcall *origSetBuiltinMap)(void *mapname, DWORD a2);
 char *__fastcall hookSetBuiltinMap(void *mapname, DWORD a2) {
