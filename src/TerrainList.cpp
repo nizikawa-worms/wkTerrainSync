@@ -112,8 +112,8 @@ void __stdcall TerrainList::hookWriteMapThumbnail(int a1) {
 			newTerrain = rand() % (maxDefaultTerrain + 1);
 
 		// force map style
-		for(int i=1; i < 8; i++) {
-			if((GetAsyncKeyState(0x30 + i) & 0x8000)) {
+		for(int i=0; i < 8; i++) {
+			if((GetAsyncKeyState(0x31 + i) & 0x8000)) {
 				*(DWORD *)(a1 + 1316) = (i & 7) >= 4;
 				*(DWORD *)(a1 + 1328) = i & 3;
 				break;
