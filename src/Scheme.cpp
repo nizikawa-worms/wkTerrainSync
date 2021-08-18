@@ -8,6 +8,7 @@
 #include "Config.h"
 #include "WaLibc.h"
 #include "Frontend.h"
+#include "Debugf.h"
 
 namespace fs = std::filesystem;
 
@@ -30,7 +31,7 @@ void Scheme::dumpSchemeFromResources(int id, std::filesystem::path path) {
 			fclose(pf);
 		} else throw std::runtime_error("Failed to save .wsc");
 	} catch (std::exception & e) {
-		printf("dumpSchemeFromResources: resource: %d failed, reason: %s\n", id, e.what());
+		debugf("dumping resource: %d failed, reason: %s\n", id, e.what());
 	}
 }
 
@@ -48,7 +49,7 @@ std::pair<int, size_t> Scheme::getSchemeVersionAndSize() {
 	_asm call addrGetSchemeVersion
 	_asm mov retv, eax
 
-	printf("Scheme version: %d size: %d\n", retv, schemesize);
+//	debugf("Scheme version: %d size: %d\n", retv, schemesize);
 	return {retv, schemesize};
 }
 
@@ -136,7 +137,7 @@ void Scheme::loadSchemeFromBytestr(std::string data) {
 	if(data.size() < 0x1E8) {
 //		Utils::hexDump("Loaded 3.8 scheme", data.data(), data.size());
 		memcpy((char *) (addrSchemeStruct + 0x14), data.data(), data.size());
-		printf("Restored scheme from replay json\n");
+		debugf("Restored scheme from replay json\n");
 	} else {
 		MessageBoxA(0, "Replay json file contains embedded WAM scheme, but it exceeds allowed scheme size.", Config::getFullStr().c_str(), MB_ICONERROR);
 	}
@@ -253,30 +254,30 @@ void Scheme::callRefreshOnlineMultiplayerSchemeDisplay() {
 
 
 void Scheme::install() {
-	DWORD addrGetSchemeSettingsFromWam = Hooks::scanPattern("GetSchemeSettingsFromWam", "\x57\x6A\x04\x68\x00\x00\x00\x00\x8B\xF8\xE8\x00\x00\x00\x00\x83\xF8\xFF\x75\x04\x0B\xC0\x5F\xC3\x8B\x47\x0C\x56\x8B\x35\x00\x00\x00\x00\x50\x6A\x00\x68\x00\x00\x00\x00\x68\x00\x00\x00\x00\xFF\xD6", "????????xxx????xxxxxxxxxxxxxxx????xxxx????x????xx");
-	DWORD addrGetBuiltinSchemeName = Hooks::scanPattern("GetBuiltinSchemeName", "\x83\xC1\xFF\x83\xF9\x10\x0F\x87\x00\x00\x00\x00\xFF\x24\x8D\x00\x00\x00\x00\x83\xC0\x0C\x50\xBA\x00\x00\x00\x00\xE8\x00\x00\x00\x00\xB8\x00\x00\x00\x00\xC3", "??????xx????xxx????xxxxx????x????x????x");
+	DWORD addrGetSchemeSettingsFromWam = _ScanPattern("GetSchemeSettingsFromWam", "\x57\x6A\x04\x68\x00\x00\x00\x00\x8B\xF8\xE8\x00\x00\x00\x00\x83\xF8\xFF\x75\x04\x0B\xC0\x5F\xC3\x8B\x47\x0C\x56\x8B\x35\x00\x00\x00\x00\x50\x6A\x00\x68\x00\x00\x00\x00\x68\x00\x00\x00\x00\xFF\xD6", "????????xxx????xxxxxxxxxxxxxxx????xxxx????x????xx");
+	DWORD addrGetBuiltinSchemeName = _ScanPattern("GetBuiltinSchemeName", "\x83\xC1\xFF\x83\xF9\x10\x0F\x87\x00\x00\x00\x00\xFF\x24\x8D\x00\x00\x00\x00\x83\xC0\x0C\x50\xBA\x00\x00\x00\x00\xE8\x00\x00\x00\x00\xB8\x00\x00\x00\x00\xC3", "??????xx????xxx????xxxxx????x????x????x");
 
-	DWORD addrSetWscScheme = Hooks::scanPattern("SetWscScheme", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x55\x8B\xAC\x24\x00\x00\x00\x00\x56\x8B\xB4\x24\x00\x00\x00\x00\x57\x8D\x4C\x24\x20", "???????xx????xxxx????xx????xxxxx????xxxx????xxxxx");
-	addrGetSchemeVersion = Hooks::scanPattern("GetSchemeVersion", "\xB8\x00\x00\x00\x00\xB9\x00\x00\x00\x00\x2B\xC8\x8D\x64\x24\x00\x8A\x94\x06\x00\x00\x00\x00\x3A\x14\x01\x75\x38\x83\xE8\x01\x75\xEF\x33\xC9\x8D\x86\x00\x00\x00\x00\x8D\xA4\x24\x00\x00\x00\x00", "??????????xxxxxxxxx????xxxxxxxxxxxxxx????xxx????");
+	DWORD addrSetWscScheme = _ScanPattern("SetWscScheme", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x55\x8B\xAC\x24\x00\x00\x00\x00\x56\x8B\xB4\x24\x00\x00\x00\x00\x57\x8D\x4C\x24\x20", "???????xx????xxxx????xx????xxxxx????xxxx????xxxxx");
+	addrGetSchemeVersion = _ScanPattern("GetSchemeVersion", "\xB8\x00\x00\x00\x00\xB9\x00\x00\x00\x00\x2B\xC8\x8D\x64\x24\x00\x8A\x94\x06\x00\x00\x00\x00\x3A\x14\x01\x75\x38\x83\xE8\x01\x75\xEF\x33\xC9\x8D\x86\x00\x00\x00\x00\x8D\xA4\x24\x00\x00\x00\x00", "??????????xxxxxxxxx????xxxxxxxxxxxxxx????xxx????");
 	origSendWscScheme =
 			(int (__stdcall *)(DWORD,char))
-					Hooks::scanPattern("SendWscScheme", "\x55\x8B\xEC\x83\xE4\xF8\x81\xEC\x00\x00\x00\x00\x56\x57\xBF\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x4D\x08\x89\x81\x00\x00\x00\x00\x8B\x15\x00\x00\x00\x00\xA0\x00\x00\x00\x00\x66\xC7\x44\x24\x00\x00\x00", "??????xx????xxx????x????xxxxx????xx????x????xxxx???");
-	DWORD addrReadWamSchemeSettings = Hooks::scanPattern("ReadWamSchemeSettings", "\x57\x6A\x04\x68\x00\x00\x00\x00\x8B\xF8\xE8\x00\x00\x00\x00\x83\xF8\xFF\x75\x04\x0B\xC0\x5F\xC3\x8B\x47\x0C\x56\x8B\x35\x00\x00\x00\x00\x50", "????????xxx????xxxxxxxxxxxxxxx????x");
-	DWORD addrReadWamSchemeOptions = Hooks::scanPattern("ReadWamSchemeOptions", "\x51\x53\x55\x56\x8B\x35\x00\x00\x00\x00\x57\x8B\xF8\x8B\x47\x0C\x50\x6A\x00\x68\x00\x00\x00\x00\x68\x00\x00\x00\x00\xFF\xD6\xA2\x00\x00\x00\x00", "??????????xxxxxxxxxx????x????xxx????");
+					_ScanPattern("SendWscScheme", "\x55\x8B\xEC\x83\xE4\xF8\x81\xEC\x00\x00\x00\x00\x56\x57\xBF\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x4D\x08\x89\x81\x00\x00\x00\x00\x8B\x15\x00\x00\x00\x00\xA0\x00\x00\x00\x00\x66\xC7\x44\x24\x00\x00\x00", "??????xx????xxx????x????xxxxx????xx????x????xxxx???");
+	DWORD addrReadWamSchemeSettings = _ScanPattern("ReadWamSchemeSettings", "\x57\x6A\x04\x68\x00\x00\x00\x00\x8B\xF8\xE8\x00\x00\x00\x00\x83\xF8\xFF\x75\x04\x0B\xC0\x5F\xC3\x8B\x47\x0C\x56\x8B\x35\x00\x00\x00\x00\x50", "????????xxx????xxxxxxxxxxxxxxx????x");
+	DWORD addrReadWamSchemeOptions = _ScanPattern("ReadWamSchemeOptions", "\x51\x53\x55\x56\x8B\x35\x00\x00\x00\x00\x57\x8B\xF8\x8B\x47\x0C\x50\x6A\x00\x68\x00\x00\x00\x00\x68\x00\x00\x00\x00\xFF\xD6\xA2\x00\x00\x00\x00", "??????????xxxxxxxxxx????x????xxx????");
 
-	addrRefreshOfflineMultiplayerSchemeDisplay = Hooks::scanPattern("RefreshOfflineMultiplayerSchemeDisplay", "\x51\x56\x57\x8B\xF8\xA0\x00\x00\x00\x00\x3C\x02\x75\x07\xB8\x00\x00\x00\x00\xEB\x0F\x33\xC9\x84\xC0\x0F\x95\xC1\x81\xC1\x00\x00\x00\x00\x8B\xC1\x8D\xB7\x00\x00\x00\x00", "??????????xxxxx????xxxxxxxxxxx????xxxx????");
-	addrRefreshOnlineMultiplayerSchemeDisplay = Hooks::scanPattern("RefreshOnlineMultiplayerSchemeDisplay", "\x51\x56\x57\x8B\xF8\x0F\xBE\x05\x00\x00\x00\x00\x89\x87\x00\x00\x00\x00\x0F\xBE\x0D\x00\x00\x00\x00\x89\x8F\x00\x00\x00\x00\x8B\xCF\xE8\x00\x00\x00\x00", "??????xx????xx????xxx????xx????xxx????");
+	addrRefreshOfflineMultiplayerSchemeDisplay = _ScanPattern("RefreshOfflineMultiplayerSchemeDisplay", "\x51\x56\x57\x8B\xF8\xA0\x00\x00\x00\x00\x3C\x02\x75\x07\xB8\x00\x00\x00\x00\xEB\x0F\x33\xC9\x84\xC0\x0F\x95\xC1\x81\xC1\x00\x00\x00\x00\x8B\xC1\x8D\xB7\x00\x00\x00\x00", "??????????xxxxx????xxxxxxxxxxx????xxxx????");
+	addrRefreshOnlineMultiplayerSchemeDisplay = _ScanPattern("RefreshOnlineMultiplayerSchemeDisplay", "\x51\x56\x57\x8B\xF8\x0F\xBE\x05\x00\x00\x00\x00\x89\x87\x00\x00\x00\x00\x0F\xBE\x0D\x00\x00\x00\x00\x89\x8F\x00\x00\x00\x00\x8B\xCF\xE8\x00\x00\x00\x00", "??????xx????xx????xxx????xx????xxx????");
 	addrSchemeStruct = *(DWORD*)(addrGetSchemeSettingsFromWam + 0x4);
 	addrSchemeStructAmmo = addrSchemeStruct + 0xEC;
 	DWORD addrSetBuiltinScheme = (addrGetSchemeSettingsFromWam + 0xF + *(DWORD*)(addrGetSchemeSettingsFromWam + 0xB));
 
-	printf("addrSchemeStruct: 0x%X addrSetBuiltinScheme: 0x%X\n", addrSchemeStruct, addrSetBuiltinScheme);
+	debugf("addrSchemeStruct: 0x%X addrSetBuiltinScheme: 0x%X\n", addrSchemeStruct, addrSetBuiltinScheme);
 
-	Hooks::hook("SetWscScheme", addrSetWscScheme, (DWORD *) hookSetWscScheme, (DWORD *) &origSetWscScheme);
-	Hooks::hook("GetBuiltinSchemeName", addrGetBuiltinSchemeName, (DWORD *) hookGetBuiltinSchemeName, (DWORD *) &origGetBuiltinSchemeName);
-	Hooks::hook("SetBuiltinScheme", addrSetBuiltinScheme, (DWORD *) hookSetBuiltinScheme, (DWORD *) &origSetBuiltinScheme);
-	Hooks::hook("ReadWamSchemeSettings", addrReadWamSchemeSettings, (DWORD *) hookReadWamSchemeSettings, (DWORD *) &origReadWamSchemeSettings);
-	Hooks::hook("ReadWamSchemeOptions", addrReadWamSchemeOptions, (DWORD *) hookReadWamSchemeOptions, (DWORD *) &origReadWamSchemeOptions);
+	_HookDefault(SetWscScheme);
+	_HookDefault(GetBuiltinSchemeName);
+	_HookDefault(SetBuiltinScheme);
+	_HookDefault(ReadWamSchemeSettings);
+	_HookDefault(ReadWamSchemeOptions);
 
 	dumpSchemeFromResources(286, missionDefaultSchemePath);
 }

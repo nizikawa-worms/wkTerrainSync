@@ -20,11 +20,12 @@
 #include "FrontendDialogs.h"
 #include "Scheme.h"
 #include "Missions.h"
+#include "Debugf.h"
 #include <chrono>
 
 void install() {
 	srand(time(0) * GetCurrentProcessId());
-	printf("Detected WA installation directory: %s\n", Config::getWaDir().string().c_str());
+	debugf("Detected WA installation directory: %s\n", Config::getWaDir().string().c_str());
 	WaLibc::install();
 	TerrainList::install();
 	Packets::install();
@@ -40,7 +41,7 @@ void install() {
 	Scheme::install();
 	Missions::install();
 
-	printf("Hooks installed - processing files...\n");
+	debugf("Hooks installed - processing files...\n");
 	Missions::createMissionDirs();
 	Missions::convertMissionFiles();
 	TerrainList::rescanTerrains();
@@ -59,7 +60,7 @@ bool LockGlobalInstance(LPCTSTR MutexName)
 char LocalMutexName[MAX_PATH];
 bool LockCurrentInstance(LPCTSTR MutexName)
 {
-	sprintf_s(LocalMutexName, "P%u/%s", GetCurrentProcessId(), MutexName);
+	_snprintf_s(LocalMutexName, _TRUNCATE,"P%u/%s", GetCurrentProcessId(), MutexName);
 	return LockGlobalInstance(LocalMutexName);
 }
 

@@ -7,6 +7,7 @@
 #include "Config.h"
 #include "MapGenerator.h"
 #include "Missions.h"
+#include "Debugf.h"
 
 Replay::ReplayOffsets Replay::extractReplayOffsets(char * replayName) {
 	ReplayOffsets offsets;
@@ -34,7 +35,7 @@ Replay::ReplayOffsets Replay::extractReplayOffsets(char * replayName) {
 		fclose(f);
 		return offsets;
 	} catch (std::exception &e) {
-		printf("extractReplayOffsets exception: %s\n", e.what());
+		debugf("exception: %s\n", e.what());
 		if (f)
 			fclose(f);
 		return offsets;
@@ -51,11 +52,18 @@ int __stdcall Replay::hookCreateReplay(int a1, const char* a2, __time64_t Time) 
 	auto ret = origCreateReplay(a1, a2, Time);
 
 	char * replayName = (char*)(a1 + 0xDF60);
-	printf("hookCreateReplay: %s\n", replayName);
+
+	int hasdata = 0;
+	for(auto & cb : hasDataToSaveCallbacks) {
+		hasdata |= cb();
+	}
 
 	auto & lastTerrainInfo = TerrainList::getLastTerrainInfo();
-	if(lastTerrainInfo.hash.empty() && !MapGenerator::getScaleXIncrements() && !MapGenerator::getScaleYIncrements() && !Missions::getWamFlag()) {
-		printf("Not saving wkterrainsync metadata in replay file\n");
+	if((!lastTerrainInfo || !(lastTerrainInfo && lastTerrainInfo->custom))
+		&& !MapGenerator::getScaleXIncrements() && !MapGenerator::getScaleYIncrements()
+		&& !Missions::getWamFlag()
+		&& !hasdata) {
+		debugf("Not saving wkterrainsync metadata in replay file\n");
 		return ret;
 	}
 
@@ -88,11 +96,11 @@ int __stdcall Replay::hookCreateReplay(int a1, const char* a2, __time64_t Time) 
 		fwrite(data.c_str(), data.size(), 1, f);
 		fwrite(&terrainChunkSize, sizeof(terrainChunkSize), 1, f);
 		fwrite(&replayMagic, sizeof(replayMagic), 1, f);
-		printf("hookCreateReplay: save wkterrainsync info in replay\n");
+		debugf("saved wkterrainsync info in replay\n");
 		fclose(f);
 		return ret;
 	} catch(std::exception & e) {
-		printf("hookCreateReplay exception: %s\n", e.what());
+		debugf("exception: %s\n", e.what());
 		if(f)
 			fclose(f);
 		return ret;
@@ -108,9 +116,10 @@ void Replay::loadInfo(nlohmann::json & json) {
 }
 
 void Replay::loadReplay(char *replayName) {
-	printf("loadReplay: %s\n", replayName);
+	debugf("file: %s\n", replayName);
 	auto offsets = extractReplayOffsets(replayName);
 	replayPlaybackFlag = true;
+	if(TerrainList::getTerrainList().empty()) TerrainList::rescanTerrains();
 	FILE * f = fopen(replayName, "rb");
 	try {
 		if (!f)
@@ -133,7 +142,7 @@ void Replay::loadReplay(char *replayName) {
 			data[jsonSize] = 0;
 			fread(data, jsonSize, 1, f);
 
-			printf("loadReplay: Terrain chunk contents: |%s|\n", data);
+			debugf("Terrain chunk contents: |%s|\n", data);
 			nlohmann::json js = nlohmann::json::parse(data);
 
 			if(js.is_array()) {
@@ -152,7 +161,7 @@ void Replay::loadReplay(char *replayName) {
 	} catch(std::exception & e) {
 		if(f)
 			fclose(f);
-		printf("loadReplay exception: %s\n", e.what());
+		debugf("exception: %s\n", e.what());
 	}
 }
 
@@ -160,16 +169,16 @@ int (__stdcall *origLoadReplay)(int a1, int a2);
 int __stdcall Replay::hookLoadReplay(int a1, int a2) {
 //	MessageBoxA(0, "Load replay", "Load replay", 0);
 	char * filename = (char*)(a1 + 0xDB60);
-	printf("hookLoadReplay: 0x%X , 0x%s", a1, filename);
+	debugf("params: 0x%X , 0x%s\n", a1, filename);
 	loadReplay(filename);
 	return origLoadReplay(a1, a2);
 }
 
 void Replay::install() {
-	DWORD addrCreateReplay =  Hooks::scanPattern("CreateReplay", "\x55\x8B\xEC\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x8B\x5D\x08\x56\x57\x89\x65\xF0\x6A\x00\x68\x00\x00\x00\x00\xC6\x83\x00\x00\x00\x00\x00\xC7\x83\x00\x00\x00\x00\x00\x00\x00\x00", "??????????xx????xxxx????xx????xxxxxxxxxxxx????xx?????xx????????");
-	DWORD addrLoadReplay = Hooks::scanPattern("LoadReplay", "\x55\x8D\x6C\x24\x90\x83\xEC\x70\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x83\x3D\x00\x00\x00\x00\x00\x53\x8B\x5D\x78\x56", "??????xxxxx????xx????xxxx????xx????xx?????xxxxx");
-	Hooks::hook("CreateReplay", addrCreateReplay, (DWORD *) &hookCreateReplay, (DWORD *) &origCreateReplay);
-	Hooks::hook("LoadReplay", addrLoadReplay, (DWORD *) &hookLoadReplay, (DWORD *) &origLoadReplay);
+	DWORD addrCreateReplay =  _ScanPattern("CreateReplay", "\x55\x8B\xEC\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x8B\x5D\x08\x56\x57\x89\x65\xF0\x6A\x00\x68\x00\x00\x00\x00\xC6\x83\x00\x00\x00\x00\x00\xC7\x83\x00\x00\x00\x00\x00\x00\x00\x00", "??????????xx????xxxx????xx????xxxxxxxxxxxx????xx?????xx????????");
+	DWORD addrLoadReplay = _ScanPattern("LoadReplay", "\x55\x8D\x6C\x24\x90\x83\xEC\x70\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x83\x3D\x00\x00\x00\x00\x00\x53\x8B\x5D\x78\x56", "??????xxxxx????xx????xxxx????xx????xx?????xxxxx");
+	_HookDefault(CreateReplay);
+	_HookDefault(LoadReplay);
 }
 
 bool Replay::isReplayPlaybackFlag() {
@@ -190,5 +199,9 @@ void Replay::registerLoadReplayCallback(void(__stdcall * callback)(const char * 
 
 void Replay::registerCreateReplayCallback(const char*(__stdcall * callback)(const char * jsonstr)) {
 	createReplayCallbacks.push_back(callback);
+}
+
+void Replay::registerHasDataToSaveCallback(int(__stdcall * callback)()) {
+	hasDataToSaveCallbacks.push_back(callback);
 }
 

@@ -21,6 +21,7 @@ private:
 	static inline int windowWidth = 0;
 	static inline int windowHeight = 0;
 	static inline int moveMapComboLeft = 0;
+	static inline bool disableSetFocus = false;
 
 	static void __fastcall hookLocalMultiplayerDDX_Control(CWnd* This, int EDX, CDataExchange *a2);
 	static void __fastcall hookLobbyHostScreenDDX_Control(CWnd* This, int EDX, CDataExchange *a2);

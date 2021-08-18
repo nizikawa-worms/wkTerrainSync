@@ -7,6 +7,7 @@
 #include "LobbyChat.h"
 #include "MapGenerator.h"
 #include "Config.h"
+#include "Debugf.h"
 
 void (__fastcall *origLocalMultiplayerDDX_Control)(CWnd* This, int EDX, CDataExchange *a2);
 void __fastcall FrontendDialogs::hookLocalMultiplayerDDX_Control(CWnd* This, int EDX, CDataExchange *a2) {
@@ -80,7 +81,7 @@ void FrontendDialogs::createTerrainSizeComboBoxes(CWnd *window, CWnd *mapList, C
 	int mapListHeight = mapListRect.bottom - mapListRect.top;
 
 	mapListWidth *= 0.5;
-	SetWindowPos(mapListHwnd,NULL, mapListRect.left, mapListRect.top, mapListWidth, mapListHeight, SWP_NOMOVE | SWP_NOZORDER);
+	SetWindowPos(mapListHwnd,NULL, mapListRect.left, mapListRect.top, mapListWidth, mapListHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 	GetWindowRect(mapListHwnd, &mapListRect);
 
 	// at this moment the maplist is placed offscreen, so just manually specify XY pos
@@ -96,7 +97,7 @@ void FrontendDialogs::createTerrainSizeComboBoxes(CWnd *window, CWnd *mapList, C
 	int comboHeightYsize = mapListHeight;
 
 	comboWidthHwnd = CreateWindow(WC_EDIT, TEXT("1.0x"),
-									 ES_LEFT | ES_AUTOHSCROLL | ES_READONLY | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+									 ES_LEFT | ES_AUTOHSCROLL | ES_READONLY | WS_CHILD | WS_VISIBLE,
 									   comboWidthXpos, comboWidthYpos, comboWidthXsize, comboWidthYsize,
 									 windowHwnd, (HMENU)comboWidthID, GetModuleHandle(NULL), NULL);
 	comboWidth = (CWnd*)WaLibc::waMalloc(1068);
@@ -107,7 +108,7 @@ void FrontendDialogs::createTerrainSizeComboBoxes(CWnd *window, CWnd *mapList, C
 	SetWindowPos(comboWidthHwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
 	comboHeightHwnd = CreateWindow(WC_EDIT, TEXT("1.0x"),
-									   ES_LEFT | ES_AUTOHSCROLL | ES_READONLY | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+									   ES_LEFT | ES_AUTOHSCROLL | ES_READONLY | WS_CHILD | WS_VISIBLE,
 										comboHeightXpos, comboHeightYpos, comboHeightXsize, comboHeightYsize,
 									   windowHwnd, (HMENU)comboHeightID, GetModuleHandle(NULL), NULL);
 	comboHeight = (CWnd*)WaLibc::waMalloc(1068);
@@ -120,7 +121,7 @@ void FrontendDialogs::createTerrainSizeComboBoxes(CWnd *window, CWnd *mapList, C
 	for(int i=0; i <= (MapGenerator::scaleMax - 1) / MapGenerator::scaleIncrement; i++) {
 		char buff[32];
 		float value = 1.0 + i * MapGenerator::scaleIncrement;
-		sprintf_s(buff, "%.01fx", value);
+		_snprintf_s(buff, _TRUNCATE, "%.01fx", value);
 		Frontend::origAddEntryToComboBox(buff, 0, comboWidth, 1000);
 		Frontend::origAddEntryToComboBox(buff, 0, comboHeight, 1000);
 	}
@@ -147,7 +148,7 @@ void FrontendDialogs::resetComboBoxesText() {
 		HWND widthHwnd = *(HWND*)((DWORD)comboWidth + 0x20);
 		float scale = MapGenerator::getEffectiveScaleX();
 		char buff[32];
-		sprintf_s(buff, "%.01fx", scale);
+		_snprintf_s(buff, _TRUNCATE, "%.01fx", scale);
 		*(int *)((DWORD)comboWidth + 0x414) = -1;
 		SetWindowTextA(widthHwnd, buff);
 	}
@@ -155,7 +156,7 @@ void FrontendDialogs::resetComboBoxesText() {
 		HWND heightHwnd = *(HWND*)((DWORD)comboHeight + 0x20);
 		float scale = MapGenerator::getEffectiveScaleY();
 		char buff[32];
-		sprintf_s(buff, "%.01fx", scale);
+		_snprintf_s(buff, _TRUNCATE, "%.01fx", scale);
 		*(int *)((DWORD)comboHeight + 0x414) = -1;
 		SetWindowTextA(heightHwnd, buff);
 	}
@@ -173,7 +174,7 @@ int __stdcall FrontendDialogs::hookAddDefaultLevelsToCombo() {
 		MapWindowPoints(HWND_DESKTOP, GetParent(mapHwnd), (LPPOINT) &mapRect, 2);
 
 		if(moveMapComboLeft) {
-			SetWindowPos(mapHwnd, HWND_TOP, mapRect.left + Frontend::scaleSize(moveMapComboLeft, windowWidth, windowHeight), mapRect.top, 0, 0, SWP_NOSIZE);
+			SetWindowPos(mapHwnd, HWND_TOP, mapRect.left + Frontend::scaleSize(moveMapComboLeft, windowWidth, windowHeight), mapRect.top, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOSENDCHANGING);
 			moveMapComboLeft = 0;
 			GetWindowRect(mapHwnd, &mapRect);
 			MapWindowPoints(HWND_DESKTOP, GetParent(mapHwnd), (LPPOINT) &mapRect, 2);
@@ -203,31 +204,30 @@ int __stdcall FrontendDialogs::hookAddDefaultLevelsToCombo() {
 
 
 void FrontendDialogs::install() {
-	DWORD addrAddDefaultLevelsToCombo = Hooks::scanPattern("AddDefaultLevelsToCombo", "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x08\x53\x56\xBE\x00\x00\x00\x00\xC7\x44\x24\x00\x00\x00\x00\x00\xEB\x06\x8D\x9B\x00\x00\x00\x00\x0F\xB6\x5E\x09\x68\x00\x00\x00\x00\x57", "??????xxxxxx????xxx?????xxxxxxxxxxxxx????x");
-
-	DWORD addrCreateLocalMultiplayerDialog = Hooks::scanPattern("CreateLocalMultiplayerDialog","\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x24\x55\x8B\x6C\x24\x38\x56\x57\x33\xFF\x57\x68\x00\x00\x00\x00\x55\xE8\x00\x00\x00\x00\x89\xBD\x00\x00\x00\x00\x89\xBD\x00\x00\x00\x00\x89\x7C\x24\x38", "???????xx????xxxx????xxxxxxxxxxxxxx????xx????xx????xx????xxxx");
+	DWORD addrAddDefaultLevelsToCombo = _ScanPattern("AddDefaultLevelsToCombo", "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x08\x53\x56\xBE\x00\x00\x00\x00\xC7\x44\x24\x00\x00\x00\x00\x00\xEB\x06\x8D\x9B\x00\x00\x00\x00\x0F\xB6\x5E\x09\x68\x00\x00\x00\x00\x57", "??????xxxxxx????xxx?????xxxxxxxxxxxxx????x");
+	DWORD addrCreateLocalMultiplayerDialog = _ScanPattern("CreateLocalMultiplayerDialog", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x24\x55\x8B\x6C\x24\x38\x56\x57\x33\xFF\x57\x68\x00\x00\x00\x00\x55\xE8\x00\x00\x00\x00\x89\xBD\x00\x00\x00\x00\x89\xBD\x00\x00\x00\x00\x89\x7C\x24\x38", "???????xx????xxxx????xxxxxxxxxxxxxx????xx????xx????xx????xxxx");
 	DWORD * LocalMultiplayerCDialogVTable = *(DWORD**)(addrCreateLocalMultiplayerDialog + 0x46);
 	DWORD addrLocalMultiplayerDDX_Control = LocalMultiplayerCDialogVTable[61];
-	printf("LocalMultiplayerCDialogVTable: 0x%X DDX_Control: 0x%X\n", (DWORD)LocalMultiplayerCDialogVTable, (DWORD)addrLocalMultiplayerDDX_Control);
+	debugf("LocalMultiplayerCDialogVTable: 0x%X DDX_Control: 0x%X\n", (DWORD)LocalMultiplayerCDialogVTable, (DWORD)addrLocalMultiplayerDDX_Control);
 
-	DWORD addrConstructLocalMultiplayerEndscreenDialog = Hooks::scanPattern("ConstructLocalMultiplayerEndscreenDialog", "\x64\xA1\x00\x00\x00\x00\x6A\xFF\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x53\x56\x57\x8B\x7C\x24\x1C\x33\xDB\x53\x68\x00\x00\x00\x00\x57\xE8\x00\x00\x00\x00\x89\x9F\x00\x00\x00\x00\x89\x9F\x00\x00\x00\x00\x6A\x01", "??????xxx????xxxx????xxxxxxxxxxx????xx????xx????xx????xx");
+	DWORD addrConstructLocalMultiplayerEndscreenDialog = _ScanPattern("ConstructLocalMultiplayerEndscreenDialog", "\x64\xA1\x00\x00\x00\x00\x6A\xFF\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x53\x56\x57\x8B\x7C\x24\x1C\x33\xDB\x53\x68\x00\x00\x00\x00\x57\xE8\x00\x00\x00\x00\x89\x9F\x00\x00\x00\x00\x89\x9F\x00\x00\x00\x00\x6A\x01", "??????xxx????xxxx????xxxxxxxxxxx????xx????xx????xx????xx");
 	DWORD * LocalMultiplayerEndscreenDialogVTable = *(DWORD**)(addrConstructLocalMultiplayerEndscreenDialog + 0x45);
 	DWORD addrLocalMultiplayerEndscreenDDX_Control = LocalMultiplayerEndscreenDialogVTable[61];
-	printf("LocalMultiplayerEndscreenDialogVTable: 0x%X DDX_Control: 0x%X\n", (DWORD)LocalMultiplayerEndscreenDialogVTable, (DWORD)LocalMultiplayerEndscreenDialogVTable);
+	debugf("LocalMultiplayerEndscreenDialogVTable: 0x%X DDX_Control: 0x%X\n", (DWORD)LocalMultiplayerEndscreenDialogVTable, (DWORD)LocalMultiplayerEndscreenDialogVTable);
 
 	DWORD addrConstructLobbyHostScreen = LobbyChat::getAddrConstructLobbyHostScreen();
 	DWORD * LobbyHostScreenVTable = *(DWORD**)(addrConstructLobbyHostScreen + 0x41);
 	DWORD addrLobbyHostScreenDDX_Control = LobbyHostScreenVTable[61];
-	printf("LobbyHostScreenVTable: 0x%X DDX_Control: 0x%X\n", (DWORD)LobbyHostScreenVTable, (DWORD)addrLobbyHostScreenDDX_Control);
+	debugf("LobbyHostScreenVTable: 0x%X DDX_Control: 0x%X\n", (DWORD)LobbyHostScreenVTable, (DWORD)addrLobbyHostScreenDDX_Control);
 
 	DWORD addrConstructLobbyHostEndScreenWrapper = LobbyChat::getAddrConstructLobbyHostEndScreenWrapper();
 	DWORD * LobbyHostEndScreenWrapperVTable = *(DWORD**)(addrConstructLobbyHostEndScreenWrapper + 0x40);
 	DWORD addrLobbyHostEndScreenWrapperDDX_Control = LobbyHostEndScreenWrapperVTable[61];
-	printf("LobbyHostEndScreenWrapperVTable: 0x%X DDX_Control: 0x%X\n", (DWORD)LobbyHostEndScreenWrapperVTable, (DWORD)addrLobbyHostEndScreenWrapperDDX_Control);
+	debugf("LobbyHostEndScreenWrapperVTable: 0x%X DDX_Control: 0x%X\n", (DWORD)LobbyHostEndScreenWrapperVTable, (DWORD)addrLobbyHostEndScreenWrapperDDX_Control);
 
-	Hooks::hook("LocalMultiplayerDDX_Control", addrLocalMultiplayerDDX_Control, (DWORD *) &hookLocalMultiplayerDDX_Control, (DWORD *) &origLocalMultiplayerDDX_Control);
-	Hooks::hook("LobbyHostScreenDDX_Control", addrLobbyHostScreenDDX_Control, (DWORD *) &hookLobbyHostScreenDDX_Control, (DWORD *) &origLobbyHostScreenDDX_Control);
-	Hooks::hook("LobbyHostEndScreenWrapperDDX_Control", addrLobbyHostEndScreenWrapperDDX_Control, (DWORD *) &hookLobbyHostEndScreenWrapperDDX_Control, (DWORD *) &origLobbyHostEndScreenWrapperDDX_Control);
-	Hooks::hook("LocalMultiplayerEndscreenDDX_Control", addrLocalMultiplayerEndscreenDDX_Control, (DWORD *) &hookLocalMultiplayerEndscreenDDX_Control, (DWORD *) &origLocalMultiplayerEndscreenDDX_Control);
-	Hooks::hook("AddDefaultLevelsToCombo", addrAddDefaultLevelsToCombo, (DWORD *) &hookAddDefaultLevelsToCombo, (DWORD *) &origAddDefaultLevelsToCombo);
+	_HookDefault(LocalMultiplayerDDX_Control);
+	_HookDefault(LobbyHostScreenDDX_Control);
+	_HookDefault(LobbyHostEndScreenWrapperDDX_Control);
+	_HookDefault(LocalMultiplayerEndscreenDDX_Control);
+	_HookDefault(AddDefaultLevelsToCombo);
 }

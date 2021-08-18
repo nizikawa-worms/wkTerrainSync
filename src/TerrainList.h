@@ -6,38 +6,33 @@
 #include <map>
 #include <vector>
 #include <json.hpp>
+#include <filesystem>
+#include <set>
 
 typedef unsigned long       DWORD;
 
 class TerrainList {
 public:
-	static inline const std::string terrainDir = "data\\level\\";
+	static inline const std::filesystem::path terrainDir = "data\\level\\";
 
 	struct TerrainInfo {
+		bool custom;
 		std::string name;
-		std::string dirname;
+		std::filesystem::path dirpath;
 		std::string hash;
 		bool hasWaterDir;
 		std::string toString() const {
-			return "Name: " + name + " Dirname: |" + dirname + "| Hash: " + hash + (hasWaterDir ? " (custom water.dir)" : "");
-		}
-		void clear() {
-			dirname.clear();
-			name.clear();
-			hash.clear();
+			return "Name: " + name + " Dirpath: |" + dirpath.string() + "| Hash: " + hash + (hasWaterDir ? " (custom water.dir)" : "");
 		}
 	};
-	static const int maxTerrain = 0x1C;
+	static const int maxDefaultTerrain = 0x1C;
 	inline static const std::string fileExt = ".terrainsync";
 private:
-	static inline TerrainInfo lastTerrainInfo;
-
+	static inline std::shared_ptr<TerrainInfo> lastTerrainInfo;
 	static inline bool flagReseedTerrain = false;
-
 	static const inline std::vector<std::string> standardTerrains = {"-Beach", "-Desert", "-Farm", "-Forest", "-Hell", "Art", "Cheese", "Construction", "Desert", "Dungeon", "Easter", "Forest", "Fruit", "Gulf", "Hell", "Hospital", "Jungle", "Manhattan", "Medieval", "Music", "Pirate", "Snow", "Space", "Sports", "Tentacle", "Time", "Tools", "Tribal", "Urban"};
-	static inline std::map<std::string, TerrainInfo> customTerrains;
-	static inline std::vector<std::string> terrainList;
-
+	static inline std::map<std::string, std::shared_ptr<TerrainInfo>> customTerrains;
+	static inline std::vector<std::pair<std::string, std::shared_ptr<TerrainInfo>>> terrainList;
 
 
 	static DWORD __stdcall hookTerrain0(int a1, char* a2, char a3);
@@ -49,27 +44,31 @@ private:
 	static void __stdcall hookTerrainRandomSeed(int a2);
 //	static int __fastcall hookTerrainRandomSeedIdModifier(int a1, int a2, int a3);
 	static void __stdcall hookWriteMapThumbnail(int a1);
-	static std::string computeTerrainHash(std::string dirname);
+	static std::string computeTerrainHash(std::filesystem::path dirname);
 
 	static void __stdcall callEditorLoadTextImg(DWORD** a1, char * a2, DWORD * a3);
 	static void __stdcall callEditorAddTerrain(DWORD * a1, DWORD * a2);
 
 	static void patchTerrain4();
 	static void __stdcall hookMapTypeChecks();
+	static int __stdcall hookQuickCPUTerrain_c();
+	static inline DWORD addrWaSeed = 0;
+	static char* hookGetMapEditorTerrainPath_c(DWORD a1);
+	static char* __stdcall hookGetMapEditorTerrainPath();
 public:
 
 	static void rescanTerrains();
 	static void install();
-
-	static const std::vector<std::string> &getTerrainList();
-	static const std::map<std::string, TerrainInfo> &getCustomTerrains();
-	static TerrainInfo &getLastTerrainInfo();
-
 	static bool setLastTerrainInfoById(int newTerrain);
 	static bool setLastTerrainInfoByHash(std::string md5);
+	static void resetLastTerrainInfo();
 	static void onFrontendExit();
 	static void onLoadReplay(nlohmann::json & config);
 	static void onCreateReplay(nlohmann::json &);
+
+	static const std::shared_ptr<TerrainInfo> &getLastTerrainInfo();
+	static const std::map<std::string, std::shared_ptr<TerrainInfo>> &getCustomTerrains();
+	static const std::vector<std::pair<std::string, std::shared_ptr<TerrainInfo>>> &getTerrainList();
 };
 
 

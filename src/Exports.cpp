@@ -48,7 +48,7 @@ extern "C" {
 
 	int __stdcall Hooks_hookFunction(const char * name, DWORD pTarget, DWORD *pDetour, DWORD *ppOriginal) {
 		try {
-			Hooks::hook(name, pTarget, pDetour, ppOriginal);
+			_Hook(name, pTarget, pDetour, ppOriginal);
 			return 1;
 		} catch(std::exception & e) {
 			return 0;
@@ -56,7 +56,7 @@ extern "C" {
 	}
 
 	void __stdcall Hooks_hookAsm(DWORD startAddr, DWORD hookAddr) {
-		Hooks::hookAsm(startAddr, hookAddr);
+		_HookAsm(startAddr, hookAddr);
 	}
 
 	void __stdcall Hooks_hookVtable(const char * classname, int offset, DWORD addr, DWORD hookAddr, DWORD * original) {
@@ -64,7 +64,7 @@ extern "C" {
 	}
 
 	void __stdcall Hooks_patchAsm(DWORD addr, unsigned char *op, size_t opsize) {
-		Hooks::patchAsm(addr, op, opsize);
+		_PatchAsm(addr, op, opsize);
 	}
 
 	// Replay.cpp
@@ -74,6 +74,10 @@ extern "C" {
 
 	void __stdcall Replay_registerCreateReplayCallback(const char*(__stdcall * callback)(const char * jsonstr)) {
 		Replay::registerCreateReplayCallback(callback);
+	}
+
+	void __stdcall Replay_registerHasDataToSaveCallback(int(__stdcall * callback)()) {
+
 	}
 
 	//Frontend.cpp

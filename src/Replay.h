@@ -23,6 +23,7 @@ private:
 	static ReplayOffsets extractReplayOffsets(char * replayName);
 	static inline std::vector<void(__stdcall *)(const char *)> loadReplayCallbacks;
 	static inline std::vector<const char*(__stdcall *)(const char *)> createReplayCallbacks;
+	static inline std::vector<int(__stdcall *)()> hasDataToSaveCallbacks;
 
 	static inline bool replayPlaybackFlag = false;
 	static inline bool flagExitEarly = false;
@@ -42,6 +43,7 @@ public:
 	static __time64_t getLastTime();
 	static void registerLoadReplayCallback(void(__stdcall * callback)(const char * jsonstr));
 	static void registerCreateReplayCallback(const char*(__stdcall * callback)(const char * jsonstr));
+	static void registerHasDataToSaveCallback(int(__stdcall * callback)());
 };
 
 

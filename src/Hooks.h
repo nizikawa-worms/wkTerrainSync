@@ -6,6 +6,13 @@
 #include <string>
 #include <vector>
 #include <polyhook2/Detour/x86Detour.hpp>
+#include <polyhook2/PE/IatHook.hpp>
+
+#ifndef __CALLPOSITION__
+#define STRINGIZE_DETAIL(x) #x
+#define STRINGIZE(x) STRINGIZE_DETAIL(x)
+#define __CALLPOSITION__  __FUNCTION__ ":" STRINGIZE(__LINE__)
+#endif
 
 class Hooks {
 private:
@@ -15,6 +22,7 @@ private:
 	static inline std::map<std::string, DWORD> scanNameToAddr;
 	static inline std::map<DWORD, std::string> scanAddrToName;
 	static inline std::vector<std::unique_ptr<PLH::x86Detour>> detours;
+	static inline std::vector<std::unique_ptr<PLH::IatHook>> iathooks;
 
 	//Worms development tools by StepS
 	template<typename VT>
@@ -25,13 +33,23 @@ private:
 	static BOOL PatchMemData(PVOID pAddr, size_t buf_len, PVOID pNewData, size_t data_len);
 	static BOOL InsertJump(PVOID pDest, size_t dwPatchSize, PVOID pCallee, DWORD dwJumpType);
 public:
-	static void hook(std::string name, DWORD pTarget, DWORD *pDetour, DWORD *ppOriginal);
+	static void hook(std::string name, DWORD pTarget, DWORD *pDetour, DWORD *ppOriginal, const char * line = nullptr);
+#define _Hook(name, pTarget, pDetour, ppOriginal) Hooks::hook(name, pTarget, pDetour, ppOriginal, __CALLPOSITION__ )
+#define _HookDefault(name) Hooks::hook(#name, addr##name, (DWORD *) &hook##name, (DWORD *) &orig##name, __CALLPOSITION__)
 
-	static void hookAsm(DWORD startAddr, DWORD hookAddr);
-	static void hookVtable(const char * classname, int offset, DWORD addr, DWORD hookAddr, DWORD * original);
-	static void patchAsm(DWORD addr, unsigned char *op, size_t opsize);
+	static void hookIat(std::string dllName, std::string apiName, DWORD *pDetour, DWORD *ppOriginal);
 
-	static DWORD scanPattern(const char* name, const char* pattern, const char* mask, DWORD expected = 0);
+	static void hookAsm(DWORD startAddr, DWORD hookAddr, const char * line = nullptr);
+#define _HookAsm(startAddr, hookAddr) Hooks::hookAsm(startAddr, hookAddr, __CALLPOSITION__ )
+
+	static void hookVtable(const char * classname, int offset, DWORD addr, DWORD hookAddr, DWORD * original, const char * line = nullptr);
+#define _HookVtable(classname, offset, addr, hookAddr, original) Hooks::hookVtable(classname, offset, addr, hookAddr, original, __CALLPOSITION__ )
+
+	static void patchAsm(DWORD addr, unsigned char *op, size_t opsize, const char * line = nullptr);
+#define _PatchAsm(addr, op, opsize) Hooks::patchAsm(addr, op, opsize, __CALLPOSITION__ )
+
+	static DWORD scanPattern(const char* name, const char* pattern, const char* mask, DWORD expected = 0, const char * line = nullptr);
+#define _ScanPattern(name, pattern, mask) Hooks::scanPattern(name, pattern, mask, 0, __CALLPOSITION__ )
 
 	static const std::map<std::string, DWORD> &getScanNameToAddr();
 

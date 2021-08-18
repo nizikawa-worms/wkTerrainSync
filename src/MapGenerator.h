@@ -21,7 +21,7 @@ private:
 	static inline int scaleYIncrements = 0;
 	static inline unsigned int flagExtraFeatures = 0;
 
-	static inline DWORD mapThumbnailPtr = 0;
+	static inline DWORD mapThumbnailCWnd = 0;
 	static inline DWORD mapTypeCheckThis = 0;
 
 	static int __stdcall hookGenerateMapFromParams(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11, int a12);
@@ -78,6 +78,8 @@ public:
 
 	static void registerOnMapResetCallback(void(__stdcall * callback)(int reason));
 	static void registerOnMapEditorExitCallback(void(__stdcall * callback)());
+
+	static DWORD getMapThumbnailCWnd();
 };
 
 

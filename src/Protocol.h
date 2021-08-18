@@ -6,6 +6,7 @@
 #include <string>
 #include <json.hpp>
 #include <set>
+#include <filesystem>
 
 typedef unsigned long       DWORD;
 class Protocol {
@@ -34,7 +35,7 @@ public:
 	static void handleTerrainChunk(nlohmann::json &);
 	static void handleWamChunk(nlohmann::json &);
 
-	static void sendFile(int slot, std::string path, std::string filetype, nlohmann::json metadata);
+	static void sendTerrainFile(int slot, std::filesystem::path dirpath, std::string filetype, nlohmann::json metadata);
 	static void sendWam(DWORD connection);
 	static void sendResetWamToAllPlayers();
 

@@ -2,11 +2,13 @@
 #include <sstream>
 #include <PatternScanner.h>
 #include "Hooks.h"
+#include "Debugf.h"
 #include <fstream>
+#include <format>
 #include <polyhook2/CapstoneDisassembler.hpp>
 
 
-void Hooks::hook(std::string name, DWORD pTarget, DWORD *pDetour, DWORD *ppOriginal) {
+void Hooks::hook(std::string name, DWORD pTarget, DWORD *pDetour, DWORD *ppOriginal, const char * line) {
 	static PLH::CapstoneDisassembler dis(PLH::Mode::x86);
 	if(!pTarget)
 		throw std::runtime_error("Hook adress is null: " + name);
@@ -28,8 +30,26 @@ void Hooks::hook(std::string name, DWORD pTarget, DWORD *pDetour, DWORD *ppOrigi
 
 	hookAddrToName[pTarget] = name;
 	hookNameToAddr[name] = pTarget;
-	printf("hook: %s 0x%X -> 0x%X\n", name.c_str(), pTarget, pDetour);
+	if(!line) {
+		debugf("%s 0x%X -> 0x%X\n", name.c_str(), pTarget, pDetour);
+	} else {
+		printf("%s: hook: %s 0x%X -> 0x%X\n", line, name.c_str(), pTarget, pDetour);
+	}
 }
+
+void Hooks::hookIat(std::string dllName, std::string apiName, DWORD *pDetour, DWORD *ppOriginal) {
+	static PLH::CapstoneDisassembler dis(PLH::Mode::x86);
+	uint64_t trampoline = 0;
+	const std::wstring module;
+	auto hook = std::make_unique<PLH::IatHook>(dllName, apiName, (const uint64_t)pDetour, &trampoline, module);
+	if(!hook->hook()) {
+		throw std::runtime_error("Failed to create IAT hook: " + dllName + " " + apiName);
+	}
+	*ppOriginal = (DWORD)trampoline;
+	iathooks.push_back(std::move(hook));
+	debugf("%s::%s -> 0x%X\n", dllName.c_str(), apiName.c_str(), pDetour);
+}
+
 
 //Worms development tools by StepS
 BOOL Hooks::PatchMemData(PVOID pAddr, size_t buf_len, PVOID pNewData, size_t data_len) {
@@ -99,26 +119,40 @@ BOOL  Hooks::InsertJump(PVOID pDest, size_t dwPatchSize, PVOID pCallee, DWORD dw
 	return 0;
 }
 
-void Hooks::hookAsm(DWORD startAddr, DWORD hookAddr) {
-	printf("hookAsm: 0x%X -> 0x%X\n", startAddr, hookAddr);
+void Hooks::hookAsm(DWORD startAddr, DWORD hookAddr, const char * line) {
+	if(!line) {
+		debugf("hookAsm: 0x%X -> 0x%X\n", startAddr, hookAddr);
+	} else {
+		printf("%s hookAsm: 0x%X -> 0x%X\n", line, startAddr, hookAddr);
+	}
 	InsertJump((PVOID)startAddr, 6, (PVOID)hookAddr, IJ_PUSHRET);
 }
 
-void Hooks::patchAsm(DWORD addr, unsigned char * op, size_t opsize) {
-	printf("patchAsm: 0x%X : ", addr);
-	for (size_t i = 0; i < opsize; i++) {
-		printf("%02X ", *(unsigned char*)(addr + i));
+void Hooks::patchAsm(DWORD addr, unsigned char * op, size_t opsize, const char * line) {
+	if(Config::isDevConsoleEnabled()) {
+		if(!line) {
+			debugf("0x%X : ", addr);
+		} else {
+			printf("%s patchAsm: 0x%X : ",line, addr);
+		}
+		for (size_t i = 0; i < opsize; i++) {
+			printf("%02X ", *(unsigned char *) (addr + i));
+		}
+		printf(" -> ");
+		for (size_t i = 0; i < opsize; i++) {
+			printf("%02X ", op[i]);
+		}
+		printf("\n");
 	}
-	printf(" -> ");
-	for (size_t i = 0; i < opsize; i++) {
-		printf("%02X ", op[i]);
-	}
-	printf("\n");
 	PatchMemData((PVOID)addr, opsize, (PVOID)op, opsize);
 }
 
-void Hooks::hookVtable(const char * classname, int offset, DWORD addr, DWORD hookAddr, DWORD *original) {
-	printf("hookVtable: %s::0x%X 0x%X -> 0x%X\n", classname, offset, *(DWORD*)addr, addr);
+void Hooks::hookVtable(const char * classname, int offset, DWORD addr, DWORD hookAddr, DWORD *original, const char * line) {
+	if(!line) {
+		debugf("%s::0x%X 0x%X -> 0x%X\n", classname, offset, *(DWORD *) addr, addr);
+	} else {
+		printf("%s hookVtable: %s::0x%X 0x%X -> 0x%X\n", line, classname, offset, *(DWORD *) addr, addr);
+	}
 	*original = *(DWORD*)addr;
 	int dest = hookAddr;
 	PatchMemData((PVOID)addr, sizeof(dest), &dest, sizeof(dest));
@@ -126,13 +160,15 @@ void Hooks::hookVtable(const char * classname, int offset, DWORD addr, DWORD hoo
 
 
 
-DWORD Hooks::scanPattern(const char *name, const char *pattern, const char* mask, DWORD expected) {
+DWORD Hooks::scanPattern(const char *name, const char *pattern, const char* mask, DWORD expected, const char * line) {
 	auto ret= hl::FindPatternMask(pattern, mask);
-	printf("scanPattern: %s = 0x%X\n", name, ret);
+	if(!line) {
+		debugf("%s = 0x%X\n", name, ret);
+	} else {
+		printf("%s scanPattern: %s = 0x%X\n", line, name, ret);
+	}
 	if(!ret){
-		std::string msg = "scanPattern: failed to find memory pattern: ";
-		msg += name;
-		throw std::runtime_error(msg);
+		throw std::runtime_error(std::format("scanPattern: failed to find memory pattern: {}", name));
 	}
 	return ret;
 }
@@ -140,4 +176,3 @@ DWORD Hooks::scanPattern(const char *name, const char *pattern, const char* mask
 const std::map<std::string, DWORD> &Hooks::getScanNameToAddr() {
 	return scanNameToAddr;
 }
-

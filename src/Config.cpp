@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "Utils.h"
 #include "WaLibc.h"
+#include "Debugf.h"
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -29,6 +30,7 @@ void Config::readConfig() {
 	showInstalledTerrains = GetPrivateProfileIntA("general", "ShowInstalledTerrainsInChat", 0, iniFile.c_str());
 	thumbnailColor = GetPrivateProfileIntA("general", "MapThumbnailColor", 191, iniFile.c_str());
 	printMapScaleInChat = GetPrivateProfileIntA("general", "PrintMapScaleInChat", 1, iniFile.c_str());
+	useCustomTerrainsInSinglePlayerMode = GetPrivateProfileIntA("general", "UseCustomTerrainsInSinglePlayerMode", 1, iniFile.c_str());
 
 	parallaxBackA = GetPrivateProfileIntA("parallax", "parallaxBackA", 9011200, iniFile.c_str());
 	parallaxBackB = GetPrivateProfileIntA("parallax", "parallaxBackB", 42172416, iniFile.c_str());
@@ -109,18 +111,18 @@ int Config::waVersionCheck() {
 
 	auto version = GetModuleVersion((HMODULE)0);
 	char versionstr[64];
-	sprintf_s(versionstr, "Detected game version: %u.%u.%u.%u", PWORD(&version)[3], PWORD(&version)[2], PWORD(&version)[1], PWORD(&version)[0]);
-	printf("%s\n", versionstr);
+	_snprintf_s(versionstr, _TRUNCATE, "Detected game version: %u.%u.%u.%u", PWORD(&version)[3], PWORD(&version)[2], PWORD(&version)[1], PWORD(&version)[0]);
+	debugf("%s\n", versionstr);
 
 	std::string tversion = getFullStr();
 	char buff[512];
 	if (version < QV(3,8,0,0)) {
-		sprintf_s(buff, "wkTerrainSync is not compatible with WA versions older than 3.8.0.0.\n\n%s", versionstr);
+		_snprintf_s(buff, _TRUNCATE, "wkTerrainSync is not compatible with WA versions older than 3.8.0.0.\n\n%s", versionstr);
 		MessageBoxA(0, buff, tversion.c_str(), MB_OK | MB_ICONERROR);
 		return 0;
 	}
 	if (version >= QV(3,9,0,0)) {
-		sprintf_s(buff, "wkTerrainSync is not compatible with WA versions 3.9.x.x and newer. Besides, this functionality should be built into WA by now...\n\n%s", versionstr);
+		_snprintf_s(buff, _TRUNCATE, "wkTerrainSync is not compatible with WA versions 3.9.x.x and newer. Besides, this functionality should be built into WA by now...\n\n%s", versionstr);
 		MessageBoxA(0, buff, tversion.c_str(), MB_OK | MB_ICONERROR);
 		return 0;
 	}
@@ -128,7 +130,7 @@ int Config::waVersionCheck() {
 		return 1;
 	}
 
-	sprintf_s(buff, "wkTerrainSync is not designed to work with your WA version and may malfunction.\n\nTo disable this warning set IgnoreVersionCheck=1 in wkTerrainSync.ini file.\n\n%s", versionstr);
+	_snprintf_s(buff, _TRUNCATE, "wkTerrainSync is not designed to work with your WA version and may malfunction.\n\nTo disable this warning set IgnoreVersionCheck=1 in wkTerrainSync.ini file.\n\n%s", versionstr);
 	return MessageBoxA(0, buff, tversion.c_str(), MB_OKCANCEL | MB_ICONWARNING) == IDOK;
 }
 
@@ -143,7 +145,7 @@ std::string Config::getModuleStr() {
 	return "wkTerrainSync";
 }
 std::string Config::getVersionStr() {
-	return "v1.2.0";
+	return "v1.2.1";
 }
 
 std::string Config::getBuildStr() {
@@ -262,4 +264,8 @@ void Config::setModuleInitialized(int moduleInitialized) {
 
 void Config::registerModuleInitializedCallback(void(__stdcall * callback)()) {
 	moduleInitializedCallbacks.push_back(callback);
+}
+
+bool Config::isUseCustomTerrainsInSinglePlayerMode() {
+	return useCustomTerrainsInSinglePlayerMode;
 }

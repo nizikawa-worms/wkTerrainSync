@@ -14,6 +14,7 @@
 #include "Config.h"
 #include "CPUflags.h"
 #include "Scheme.h"
+#include "Debugf.h"
 
 namespace fs = std::filesystem;
 
@@ -63,8 +64,8 @@ void Missions::injectWamAndFixStuff() {
 	strcpy(params.path, wamPath.string().c_str());
 	params.attemptNumber = wamAttemptNumber;
 	hookLoadWAMFile(&params);
-	clearWamTmpFile();
 	setSkipGoSurrenderAmmo();
+	clearWamTmpFile();
 	flagInjectingWAM = false;
 }
 
@@ -92,13 +93,13 @@ void Missions::saveWamToTmpFile() {
 	std::ofstream out(wamPath, std::ios::binary);
 	if(!out.good()) {
 		char buff[256];
-		sprintf_s(buff, "Failed to save WAM file as: %s", wamPath.string().c_str());
+		_snprintf_s(buff, _TRUNCATE, "Failed to save WAM file as: %s", wamPath.string().c_str());
 		Frontend::callMessageBox(buff, 0, 0);
 		resetCurrentWam();
 	} else {
 		out.write(wamContents.data(), wamContents.size());
 		out.close();
-		printf("wampath: %s\n", wamPath.string().c_str());
+		debugf("wampath: %s\n", wamPath.string().c_str());
 	}
 }
 void Missions::clearWamTmpFile() {
@@ -150,18 +151,18 @@ void Missions::setupTeamsInMission(int a1) {
 	for(int i=0; i < 6; i++) {
 		DWORD teamMeta = addrLobbyTeamList + i * 0xD7B;
 		char group[32];
-		sprintf_s(group, "CPUTeam%d", i);
+		_snprintf_s(group, _TRUNCATE, "CPUTeam%d", i);
 		if(i == 0)
 			strcpy_s(group, "HumanTeam");
 		unsigned int numworms = GetPrivateProfileIntA(group, "NumberOfWorms", 0, wpcstr);
 		if(multiplayer && !numworms){
-			sprintf_s(group, "HumanTeam%d", i);
+			_snprintf_s(group, _TRUNCATE, "HumanTeam%d", i);
 			numworms = GetPrivateProfileIntA(group, "NumberOfWorms", 0, wpcstr);
 			if(!numworms) {
 				// fallback for multiplayer mission files without NumberOfWorms, but with Worm1_Energy
 				for(int a=1; a <=8; a++) {
 					char worm[32];
-					sprintf_s(worm, "Worm%d_Energy", a);
+					_snprintf_s(worm, _TRUNCATE, "Worm%d_Energy", a);
 					if(!GetPrivateProfileIntA(group, worm, 0, wpcstr)) break;
 					numworms++;
 				}
@@ -197,7 +198,7 @@ void Missions::setupTeamsInMission(int a1) {
 				int teamnameid = GetPrivateProfileIntA(group, "TeamNameNumber", 0, wpcstr);
 				if(teamNames.find(teamnameid) == teamNames.end()) {
 					numPlaceholders++;
-					sprintf((char *) (teamMeta + 0x3), "CPU Team %d", numPlaceholders, cpulevel);
+					snprintf((char *) (teamMeta + 0x3), 10, "CPU Team %d", numPlaceholders, cpulevel);
 				} else {
 					strncpy((char*)(teamMeta + 0x3), teamNames.at(teamnameid).c_str(), 16);
 				}
@@ -205,17 +206,17 @@ void Missions::setupTeamsInMission(int a1) {
 
 			for (int a = 0; a < 8; a++) {
 				char namefield[32];
-				sprintf_s(namefield, "Worm%d_NameValue", a + 1);
+				_snprintf_s(namefield, _TRUNCATE, "Worm%d_NameValue", a + 1);
 				char wormname[17];
 				GetPrivateProfileStringA(group, namefield, "", (LPSTR)&wormname, sizeof(wormname), wpcstr);
 
-				sprintf_s(namefield, "Worm%d_NameNumber", a + 1);
+				_snprintf_s(namefield, _TRUNCATE, "Worm%d_NameNumber", a + 1);
 				if(strlen(wormname)) {
 					strncpy((char*)(teamMeta + 0x9B + 0x11 * a), wormname, 16);
 				} else {
 					int wormnameid = GetPrivateProfileIntA(group, namefield, 0, wpcstr);
 					if (wormNames.find(wormnameid) == wormNames.end()) {
-						sprintf((char *) (teamMeta + 0x9B + 0x11 * a), "Worm %d", a + 1);
+						snprintf((char *) (teamMeta + 0x9B + 0x11 * a), 6, "Worm %d", a + 1);
 					} else {
 						strncpy((char *) (teamMeta + 0x9B + 0x11 * a), wormNames.at(wormnameid).c_str(), 16);
 					}
@@ -235,6 +236,7 @@ void Missions::setupTeamsInMission(int a1) {
 }
 
 void Missions::setTeamAmmo(int team, int weapon, short int ammo, short int delay) {
+	debugf("team: %d weapon: %d ammo: %d delay: %d\n", team, weapon, ammo, delay);
 	*(short int*)(addrAmmoTable + 2 * (weapon + 143 * team)) = ammo;
 	*(short int*)(addrAmmoTable + 2 * (weapon + 143 * team) + 142) = delay;
 }
@@ -245,6 +247,7 @@ void Missions::readWamFile(fs::path wam) {
 		if(contents) {
 			wamContents = std::move(*contents);
 			static const int magiclen = 8;
+			wamFlag = true;
 			if(wamContents.length() > magiclen) {
 				for(int i=0; i < magiclen; i++) {
 					unsigned char c = wamContents[i];
@@ -255,8 +258,6 @@ void Missions::readWamFile(fs::path wam) {
 					}
 				}
 			}
-
-			wamFlag = true;
 			wamDescription = describeCurrentWam(true);
 			flagDisplayedDescription = false;
 			wamTeamGroupMap.clear();
@@ -312,7 +313,7 @@ void Missions::onCreateReplay(nlohmann::json & config) {
 		if(ret) {
 			auto & scheme = *ret;
 			config["wamScheme"] = macaron::Base64::Encode(scheme);
-			printf("Saved scheme settings in replay json\n");
+			debugf("Saved scheme settings in replay json\n");
 		}
 	}
 }
@@ -322,7 +323,7 @@ void Missions::onLoadReplay(nlohmann::json & config) {
 		wamFlag = config["wamFlag"];
 		if(config.contains("wamScheme")) {
 			macaron::Base64::Decode(config["wamScheme"], wamReplayScheme);
-			printf("Read scheme settings from replay json. Size: 0x%X\n", wamReplayScheme.size());
+			debugf("Read scheme settings from replay json. Size: 0x%X\n", wamReplayScheme.size());
 		}
 	}
 }
@@ -337,7 +338,7 @@ bool __stdcall Missions::hookCheckGameEndCondition() {
 	DWORD ddmain = *(DWORD*)(gameglobal + 0x24);
 	int * condition = (int*)(ddmain + 0xD9D4);
 	if(wamFlag && *condition == 2 && !hasCpuTeam) {
-//		printf("hookCheckGameEndCondition: changing game end condition\n");
+//		debugf("changing game end condition\n");
 		*condition = 1;
 	}
 
@@ -427,23 +428,21 @@ _asm hooked:
 }
 
 void Missions::install() {
-//	DWORD addrLoadWAMFile = Hooks::scanPattern("LoadWAMFile", "\x6A\xFF\x64\xA1\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x55\x8B\xAC\x24\x00\x00\x00\x00\x56\x57\xE8\x00\x00\x00\x00\x33\xC9\x85\xC0\x0F\x95\xC1\x85\xC9\x75\x0A", "????????x????xxxx????xx????xxxxx????xxx????xxxxxxxxxxx");
-	DWORD addrFrontendLaunchMission = Hooks::scanPattern("FrontendLaunchMission", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x53\x55\x56\x57\x8B\xE9\x68\x00\x00\x00\x00\xC7\x05\x00\x00\x00\x00\x00\x00\x00\x00", "??????xxx????xx????xxxx????xx????x????xxxxxxx????xx????????");
+//	DWORD addrLoadWAMFile = ScanPatternf("LoadWAMFile", "\x6A\xFF\x64\xA1\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x55\x8B\xAC\x24\x00\x00\x00\x00\x56\x57\xE8\x00\x00\x00\x00\x33\xC9\x85\xC0\x0F\x95\xC1\x85\xC9\x75\x0A", "????????x????xxxx????xx????xxxxx????xxx????xxxxxxxxxxx");
+	DWORD addrFrontendLaunchMission = _ScanPattern("FrontendLaunchMission", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x53\x55\x56\x57\x8B\xE9\x68\x00\x00\x00\x00\xC7\x05\x00\x00\x00\x00\x00\x00\x00\x00", "??????xxx????xx????xxxx????xx????x????xxxxxxx????xx????????");
 	DWORD addrLoadWAMFile = addrFrontendLaunchMission + 0x40 + *(DWORD*)(addrFrontendLaunchMission + 0x3C);
 	DWORD addrWAMLoaderParams = *(DWORD*)(addrFrontendLaunchMission + 0x2D);
-
-//	DWORD addrFrontendLaunchDeathmatch = Hooks::scanPattern("FrontendLaunchDeathmatch", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x53\x55\x56\x57\x8B\xE9\x6A\x04\x8D\x4C\x24\x14", "??????xxx????xx????xxxx????xx????x????xxxxxxxxxxxx");
-	DWORD addrCopyTeamsSchemeAndCreateReplay = Hooks::scanPattern("CopyTeamsSchemeAndCreateReplay", "\x51\x53\x8B\x5C\x24\x10\x55\x8B\x6C\x24\x10\x83\xBD\x00\x00\x00\x00\x00\x56\x57\x75\x0A\xC7\x85\x00\x00\x00\x00\x00\x00\x00\x00\xC7\x45\x00\x00\x00\x00\x00\xB9\x00\x00\x00\x00", "??????xxxxxxx?????xxxxxx????????xx?????x????");
-	DWORD addrCopyTeams = Hooks::scanPattern("CopyTeams", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x56\x57\x33\xDB\x83\x3D\x00\x00\x00\x00\x00\x6A\x34", "??????xxx????xx????xxxx????xx????xxxxxxx?????xx");
-
-	DWORD addrReadAmmoFromWAM = Hooks::scanPattern("ReadAmmoFromWAM", "\x8B\x40\x0C\x56\x8B\x74\x24\x10\x57\x8B\x7C\x24\x0C\x50\x6A\x00\x51\x57\xFF\x15\x00\x00\x00\x00\x69\xF6\x00\x00\x00\x00\x03\x74\x24\x10\x0F\xB7\x14\x75\x00\x00\x00\x00\x66\x83\xFA\xFF", "??????xxxxxxxxxxxxxx????xx????xxxxxxxx????xxxx");
-	DWORD addrSelectFileInComboBox = Hooks::scanPattern("SelectFileInComboBox", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x24\x53\x8B\x5C\x24\x38\x8B\x03\x8B\x40\xF4\x85\xC0\x55\x56\x57\x8B\xF1\xC6\x44\x24\x00\x00", "???????xx????xxxx????xxxxxxxxxxxxxxxxxxxxxxx??");
-	DWORD addrCheckGameEndCondition = Hooks::scanPattern("CheckGameEndCondition", "\x8B\x46\x2C\x83\xB8\x00\x00\x00\x00\x00\x74\x06\xB8\x00\x00\x00\x00\xC3\x8B\xC8\x8B\x49\x24\x80\xB9\x00\x00\x00\x00\x00\x74\x12", "??????????xxx????xxxxxxxx?????xx");
-	DWORD addrCheckNumberOfRoundsToWinMatch = Hooks::scanPattern("CheckNumberOfRoundsToWinMatch", "\x57\x8B\xF8\xE8\x00\x00\x00\x00\x85\xC0\x7F\x05\x83\xC8\xFF\x5F\xC3\x8B\x47\x04\x83\xF8\x02\x74\xF3\x85\xC0\x74\xEF", "????????xxxxxxxxxxxxxxxxxxxxx");
-	DWORD addrGetMissionTitle = Hooks::scanPattern("GetMissionTitle", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\x53\x8B\x5C\x24\x18\x56\xC7\x44\x24\x00\x00\x00\x00\x00\x8B\xF1\xC7\x44\x24\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x33\xC9", "???????xx????xxxx????xxxxxxxxxx?????xxxxx?????x????xx");
-	DWORD addrGetMissionDescription = Hooks::scanPattern("GetMissionDescription", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x08\x55\x8B\x6C\x24\x1C\x56\xC7\x44\x24\x00\x00\x00\x00\x00\x8B\xF1\xC7\x44\x24\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00", "???????xx????xxxx????xxxxxxxxxxxx?????xxxxx?????x????");
-	DWORD addrReadWamEvents = Hooks::scanPattern("ReadWamEvents", "\x6A\xFF\x64\xA1\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x10\x53\x55\x56\x57\x8B\xF1\x33\xDB\x33\xED\xE8\x00\x00\x00\x00\x33\xC9", "????????x????xxxx????xxxxxxxxxxxxxx????xx");
-//	addrLoadCPUFlag = Hooks::scanPattern("LoadCPUFlag", "\x69\xC0\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x56\x8D\x34\x08\x0F\xBE\x86\x00\x00\x00\x00\xF7\xD8\x0F\x88\x00\x00\x00\x00\x8D\x48\x13\xB8\x00\x00\x00\x00\xF7\xE9", "??????xx????xxxxxxx????xxxx????xxxx????xx");
+//	DWORD addrFrontendLaunchDeathmatch = ScanPatternf("FrontendLaunchDeathmatch", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x53\x55\x56\x57\x8B\xE9\x6A\x04\x8D\x4C\x24\x14", "??????xxx????xx????xxxx????xx????x????xxxxxxxxxxxx");
+	DWORD addrCopyTeamsSchemeAndCreateReplay = _ScanPattern("CopyTeamsSchemeAndCreateReplay", "\x51\x53\x8B\x5C\x24\x10\x55\x8B\x6C\x24\x10\x83\xBD\x00\x00\x00\x00\x00\x56\x57\x75\x0A\xC7\x85\x00\x00\x00\x00\x00\x00\x00\x00\xC7\x45\x00\x00\x00\x00\x00\xB9\x00\x00\x00\x00", "??????xxxxxxx?????xxxxxx????????xx?????x????");
+	DWORD addrCopyTeams = _ScanPattern("CopyTeams", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x56\x57\x33\xDB\x83\x3D\x00\x00\x00\x00\x00\x6A\x34", "??????xxx????xx????xxxx????xx????xxxxxxx?????xx");
+	DWORD addrReadAmmoFromWAM = _ScanPattern("ReadAmmoFromWAM", "\x8B\x40\x0C\x56\x8B\x74\x24\x10\x57\x8B\x7C\x24\x0C\x50\x6A\x00\x51\x57\xFF\x15\x00\x00\x00\x00\x69\xF6\x00\x00\x00\x00\x03\x74\x24\x10\x0F\xB7\x14\x75\x00\x00\x00\x00\x66\x83\xFA\xFF", "??????xxxxxxxxxxxxxx????xx????xxxxxxxx????xxxx");
+	DWORD addrSelectFileInComboBox = _ScanPattern("SelectFileInComboBox", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x24\x53\x8B\x5C\x24\x38\x8B\x03\x8B\x40\xF4\x85\xC0\x55\x56\x57\x8B\xF1\xC6\x44\x24\x00\x00", "???????xx????xxxx????xxxxxxxxxxxxxxxxxxxxxxx??");
+	DWORD addrCheckGameEndCondition = _ScanPattern("CheckGameEndCondition", "\x8B\x46\x2C\x83\xB8\x00\x00\x00\x00\x00\x74\x06\xB8\x00\x00\x00\x00\xC3\x8B\xC8\x8B\x49\x24\x80\xB9\x00\x00\x00\x00\x00\x74\x12", "??????????xxx????xxxxxxxx?????xx");
+	DWORD addrCheckNumberOfRoundsToWinMatch = _ScanPattern("CheckNumberOfRoundsToWinMatch", "\x57\x8B\xF8\xE8\x00\x00\x00\x00\x85\xC0\x7F\x05\x83\xC8\xFF\x5F\xC3\x8B\x47\x04\x83\xF8\x02\x74\xF3\x85\xC0\x74\xEF", "????????xxxxxxxxxxxxxxxxxxxxx");
+	DWORD addrGetMissionTitle = _ScanPattern("GetMissionTitle", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\x53\x8B\x5C\x24\x18\x56\xC7\x44\x24\x00\x00\x00\x00\x00\x8B\xF1\xC7\x44\x24\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x33\xC9", "???????xx????xxxx????xxxxxxxxxx?????xxxxx?????x????xx");
+	DWORD addrGetMissionDescription = _ScanPattern("GetMissionDescription", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x08\x55\x8B\x6C\x24\x1C\x56\xC7\x44\x24\x00\x00\x00\x00\x00\x8B\xF1\xC7\x44\x24\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00", "???????xx????xxxx????xxxxxxxxxxxx?????xxxxx?????x????");
+	DWORD addrReadWamEvents = _ScanPattern("ReadWamEvents", "\x6A\xFF\x64\xA1\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x10\x53\x55\x56\x57\x8B\xF1\x33\xDB\x33\xED\xE8\x00\x00\x00\x00\x33\xC9", "????????x????xxxx????xxxxxxxxxxxxxx????xx");
+//	addrLoadCPUFlag = ScanPatternf("LoadCPUFlag", "\x69\xC0\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x56\x8D\x34\x08\x0F\xBE\x86\x00\x00\x00\x00\xF7\xD8\x0F\x88\x00\x00\x00\x00\x8D\x48\x13\xB8\x00\x00\x00\x00\xF7\xE9", "??????xx????xxxxxxx????xxxx????xxxx????xx");
 
 	addrLobbyTeamList = *(DWORD*)(addrCopyTeams + 0x1DB);
 	addrNumberOfTeams = *(char**)(addrCopyTeams + 0x8F);
@@ -454,24 +453,24 @@ void Missions::install() {
 	addrMissionTitleMap = *(DWORD*)(addrGetMissionTitle + 0xCF);
 	addrMissionDescriptionMap = *(DWORD*)(addrGetMissionDescription + 0x112);
 
-	printf("addrLoadWAMFile: 0x%X addrWAMLoaderParams: 0x%X\naddrLobbyTeamList: 0x%X addrNumberOfTeams: 0x%X\naddrAmmoTable: 0x%X addrPlayerInfoStruct: 0x%X addrMissionTitleMap: 0x%X addrMissionDescriptionMap: 0x%X\n",
+	debugf("addrLoadWAMFile: 0x%X addrWAMLoaderParams: 0x%X\naddrLobbyTeamList: 0x%X addrNumberOfTeams: 0x%X\naddrAmmoTable: 0x%X addrPlayerInfoStruct: 0x%X addrMissionTitleMap: 0x%X addrMissionDescriptionMap: 0x%X\n",
 		   addrLoadWAMFile, addrWAMLoaderParams, addrLobbyTeamList,addrNumberOfTeams, addrAmmoTable,  addrPlayerInfoStruct, addrMissionTitleMap, addrMissionDescriptionMap);
-	Hooks::hook("LoadWAMFile", addrLoadWAMFile, (DWORD *) hookLoadWAMFile, (DWORD *) &origLoadWAMFile);
-//	Hooks::hook("FrontendLaunchDeathmatch", addrFrontendLaunchDeathmatch, (DWORD *) hookFrontendLaunchDeathmatch, (DWORD *) &origFrontendLaunchDeathmatch);
-	Hooks::hook("CopyTeamsSchemeAndCreateReplay", addrCopyTeamsSchemeAndCreateReplay, (DWORD *) hookCopyTeamsSchemeAndCreateReplay, (DWORD *) &origCopyTeamsSchemeAndCreateReplay);
-	Hooks::hook("CopyTeams", addrCopyTeams, (DWORD *) hookCopyTeams, (DWORD *) &origCopyTeams);
-	Hooks::hook("SelectFileInComboBox", addrSelectFileInComboBox, (DWORD *) hookSelectFileInComboBox, (DWORD *) &origSelectFileInComboBox);
-	Hooks::hook("CheckGameEndCondition", addrCheckGameEndCondition, (DWORD *) hookCheckGameEndCondition, (DWORD *) &origCheckGameEndCondition);
-	Hooks::hook("CheckNumberOfRoundsToWinMatch", addrCheckNumberOfRoundsToWinMatch, (DWORD *) hookCheckNumberOfRoundsToWinMatch, (DWORD *) &origCheckNumberOfRoundsToWinMatch);
+	_HookDefault(LoadWAMFile);
+//	HookfDefault(FrontendLaunchDeathmatch);
+	_HookDefault(CopyTeamsSchemeAndCreateReplay);
+	_HookDefault(CopyTeams);
+	_HookDefault(SelectFileInComboBox);
+	_HookDefault(CheckGameEndCondition);
+	_HookDefault(CheckNumberOfRoundsToWinMatch);
 
 	DWORD addrReadWamEvents_patch1 = addrReadWamEvents + 0x642;
 	addrReadWamEvents_patch1_ret_normal = addrReadWamEvents + 0x649;
 	addrReadWamEvents_patch1_ret_hooked = addrReadWamEvents + 0x64E;
-	printf("addrReadWamEvents_patch1: 0x%X ret_normal: 0x%X ret_hooked: 0x%X\n", addrReadWamEvents_patch1, addrReadWamEvents_patch1_ret_normal, addrReadWamEvents_patch1_ret_hooked);
-	Hooks::hookAsm(addrReadWamEvents_patch1, (DWORD)&hookReadWamEvents_patch1);
+	debugf("addrReadWamEvents_patch1: 0x%X ret_normal: 0x%X ret_hooked: 0x%X\n", addrReadWamEvents_patch1, addrReadWamEvents_patch1_ret_normal, addrReadWamEvents_patch1_ret_hooked);
+	_HookAsm(addrReadWamEvents_patch1, (DWORD)&hookReadWamEvents_patch1);
 
 	unsigned char teamskill[] = {0x83, 0xF8, 0x7F};
-	Hooks::patchAsm(addrLoadWAMFile + 0x308, (unsigned char*)&teamskill, sizeof(teamskill));
+	_PatchAsm(addrLoadWAMFile + 0x308, (unsigned char*)&teamskill, sizeof(teamskill));
 }
 
 const std::string &Missions::getWamContents() {
@@ -484,26 +483,25 @@ bool Missions::getWamFlag() {
 
 
 void Missions::createMissionDirs() {
-	if(Config::isDontCreateMissionDirs()) {printf("createMissionDirs skipped\n"); return; }
+	if(Config::isDontCreateMissionDirs()) {debugf("createMissionDirs skipped\n"); return; }
 	auto dirs = {"Data\\Mission", "User\\SavedLevels\\Mission\\WA", "User\\SavedLevels\\Mission\\WWP", "User\\SavedLevels\\Mission\\Custom"};
 	for (auto & dir : dirs) {
 		auto path = Config::getWaDir() / dir;
-		printf("createMissionDirs: %s\n", path.string().c_str());
 		fs::create_directories(path);
 	}
 }
 void Missions::convertMissionFiles() {
-	if(Config::isDontConvertMissionFiles()) {printf("convertMissionFiles skipped\n"); return; }
+	if(Config::isDontConvertMissionFiles()) {debugf("convertMissionFiles skipped\n"); return; }
 	copyMissionFilesAttempts++;
 	if(copyMissionFilesAttempts <= 2) {
 		std::string datastr = WaLibc::getWaDataPath(true);
 		std::filesystem::path datadir(datastr);
-		printf("convertMissionFiles: data directory: |%s|\n", datastr.c_str());
+		debugf("data directory: |%s|\n", datastr.c_str());
 		if(!datadir.empty()) {
 			Missions::convertMissionFiles(datadir / "Mission", Config::getWaDir() / "user/SavedLevels/Mission/WA");
 			copyMissionFilesAttempts++;
 		} else {
-			printf("Failed to get mission files from CD (attempt: %d)\n", copyMissionFilesAttempts);
+			debugf("Failed to get mission files from CD (attempt: %d)\n", copyMissionFilesAttempts);
 		}
 	}
 }
@@ -596,18 +594,18 @@ std::string Missions::describeCurrentWam(bool formatting) {
 
 	for(int i=0; i < 6; i++) {
 		char group[32];
-		sprintf_s(group, "CPUTeam%d", i);
+		_snprintf_s(group, _TRUNCATE, "CPUTeam%d", i);
 		if(i == 0)
 			strcpy_s(group, "HumanTeam");
 		unsigned int num = GetPrivateProfileIntA(group, "NumberOfWorms", 0, wpcstr);
 		if(multiplayer && !num){
-			sprintf_s(group, "HumanTeam%d", i);
+			_snprintf_s(group, _TRUNCATE, "HumanTeam%d", i);
 			num = GetPrivateProfileIntA(group, "NumberOfWorms", 0, wpcstr);
 			if(!num) {
 				// fallback for multiplayer mission files without NumberOfWorms, but with Worm1_Energy
 				for(int a=1; a <=8; a++) {
 					char worm[32];
-					sprintf_s(worm, "Worm%d_Energy", a);
+					_snprintf_s(worm, _TRUNCATE, "Worm%d_Energy", a);
 					if(!GetPrivateProfileIntA(group, worm, 0, wpcstr)) break;
 					num++;
 				}

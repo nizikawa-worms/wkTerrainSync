@@ -37,6 +37,7 @@ add_library(wkTerrainSync SHARED
         src/Missions.cpp src/Missions.h
         src/Scheme.cpp src/Scheme.h
         src/Exports.cpp src/Exports.h
+        src/Debugf.h
         ${CMAKE_CURRENT_BINARY_DIR}/resource.rc
         )
 

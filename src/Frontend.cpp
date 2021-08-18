@@ -9,9 +9,10 @@
 #include "MapGenerator.h"
 #include "FrontendDialogs.h"
 #include "Missions.h"
+#include "Debugf.h"
 
-void (__stdcall *origChangeScreen)(int screen);
-void __stdcall Frontend::hookChangeScreen(int screen) {
+void (__stdcall *origFrontendChangeScreen)(int screen);
+void __stdcall Frontend::hookFrontendChangeScreen(int screen) {
 	int sesi;
 	_asm mov sesi, esi
 //	printf("hookChangeScreen: screen: %d\n", screen);
@@ -38,7 +39,7 @@ void __stdcall Frontend::hookChangeScreen(int screen) {
 
 	_asm mov esi, sesi
 	_asm push screen
-	_asm call origChangeScreen
+	_asm call origFrontendChangeScreen
 }
 
 int (__stdcall * origFrontendMessageBox)(const char * message, int a2, int a3);
@@ -115,39 +116,99 @@ DWORD __stdcall hookKeyCodes() {
 	return retv;
 }
 
+DWORD origSetStaticTextValue;
+void Frontend::callSetStaticTextValue(CWnd * control, const char * text) {
+	_asm mov esi, control
+	_asm push text
+	_asm call origSetStaticTextValue
+}
+
+int (__fastcall *origGetLocalizedCString)(int a1, int a2, char** a3);
+int __fastcall Frontend::hookGetLocalizedCString(int a1, int id_a2, char** a3) {
+	if(id_a2) {
+		if(id_a2 == hostMapHelpTextID || id_a2 == clientMapHelpTextID) {
+			auto & terrain = TerrainList::getLastTerrainInfo();
+			if(terrain) {
+				char buff[256];
+				_snprintf_s(buff, _TRUNCATE,"Current terrain: %s %s%s",
+							terrain->name.c_str(),
+							terrain->custom ? "(Custom)" : "",
+							id_a2 == hostMapHelpTextID ? "\nCtrl+click to generate a new map with a custom terrain, Alt+click to generate a new map with a standard terrain" : "");
+				WaLibc::CStringBufferFromString(a3, 0, buff, strlen(buff));
+				return 1;
+			} else {
+				if(id_a2 == clientMapHelpTextID) {id_a2 = 0;}
+			}
+		}
+	}
+	return origGetLocalizedCString(a1, id_a2, a3);
+}
+
+int (__fastcall *origMapThumbnailOnMouseMove)(CWnd *This, int EDX, int a2, int a3, int a4);
+int __fastcall Frontend::hookMapThumbnailOnMouseMove(CWnd* This, int EDX, int a2, int a3, int a4) {
+	DWORD * stringid = ((DWORD *)This + 0xA587);
+	if(!*stringid) {*stringid = clientMapHelpTextID;} //set help text of client's map thumbnail
+	return origMapThumbnailOnMouseMove(This, EDX, a2, a3, a4);
+}
+
+void Frontend::refreshMapThumbnailHelpText(CWnd * map) {
+	if(*addrCurrentHelpText == hostMapHelpTextID || *addrCurrentHelpText == clientMapHelpTextID) {
+		*addrCurrentHelpText = 0;
+		hookMapThumbnailOnMouseMove(map, 0, 0, 0, 0);
+	}
+}
+
+
 void Frontend::install() {
-	DWORD addrFrontendChangeScreen = Hooks::scanPattern("FrontendChangeScreen", "\x83\x3D\x00\x00\x00\x00\x00\x53\x8B\x5C\x24\x08\x75\x14\x8B\x46\x3C\xA8\x18\x74\x59\x83\xE0\xEF\x89\x5E\x44\x89\x46\x3C\x5B\xC2\x04\x00\x6A\x00\x8B\xCE\xE8\x00\x00\x00\x00\x8B\x86\x00\x00\x00\x00\x50\x8B\x86\x00\x00\x00\x00\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x33\xC0\x57", "???????xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx????xx????xxx????x????x????xxx");
+	DWORD addrFrontendChangeScreen = _ScanPattern("FrontendChangeScreen", "\x83\x3D\x00\x00\x00\x00\x00\x53\x8B\x5C\x24\x08\x75\x14\x8B\x46\x3C\xA8\x18\x74\x59\x83\xE0\xEF\x89\x5E\x44\x89\x46\x3C\x5B\xC2\x04\x00\x6A\x00\x8B\xCE\xE8\x00\x00\x00\x00\x8B\x86\x00\x00\x00\x00\x50\x8B\x86\x00\x00\x00\x00\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x33\xC0\x57", "???????xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx????xx????xxx????x????x????xxx");
 	origFrontendMessageBox =
-			(int (__stdcall *)(const char *,int,int))
-			Hooks::scanPattern("FrontendMessageBox", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x83\x3D\x00\x00\x00\x00\x00", "??????xxx????xx????xxxx????xx????x????xx?????");
+		(int (__stdcall *)(const char *,int,int))
+		_ScanPattern("FrontendMessageBox", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x83\x3D\x00\x00\x00\x00\x00", "??????xxx????xx????xxxx????xx????x????xx?????");
 
 	origAfxSetupComboBox =
 		(int (__stdcall *)(void))
-		Hooks::scanPattern("AfxSetupComboBox", "\x53\x6A\x01\x33\xDB\x53\x56\xE8\x00\x00\x00\x00\x89\x9E\x00\x00\x00\x00\xC7\x06\x00\x00\x00\x00\xC7\x46\x00\x00\x00\x00\x00\xC7\x05\x00\x00\x00\x00\x00\x00\x00\x00\x88\x9E\x00\x00\x00\x00\x88\x9E\x00\x00\x00\x00", "??????xx????xx????xx????xx?????xx????????xx????xx????");
+		_ScanPattern("AfxSetupComboBox", "\x53\x6A\x01\x33\xDB\x53\x56\xE8\x00\x00\x00\x00\x89\x9E\x00\x00\x00\x00\xC7\x06\x00\x00\x00\x00\xC7\x46\x00\x00\x00\x00\x00\xC7\x05\x00\x00\x00\x00\x00\x00\x00\x00\x88\x9E\x00\x00\x00\x00\x88\x9E\x00\x00\x00\x00", "??????xx????xx????xx????xx?????xx????????xx????xx????");
 
 	origAfxSetupStaticText =
 		(CWnd *(__stdcall *)(CWnd *))
-		Hooks::scanPattern("AfxSetupStaticText", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\x56\x8B\x74\x24\x18\x57\x8B\xCE\xE8\x00\x00\x00\x00\xC7\x06\x00\x00\x00\x00\x8D\x7E\x54", "???????xx????xxxx????xxxxxxxxxx????xx????xxx");
+		_ScanPattern("AfxSetupStaticText", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\x56\x8B\x74\x24\x18\x57\x8B\xCE\xE8\x00\x00\x00\x00\xC7\x06\x00\x00\x00\x00\x8D\x7E\x54", "???????xx????xxxx????xxxxxxxxxx????xx????xxx");
 
 	origAddEntryToComboBox =
 		(int (__fastcall *)(char *,int,CWnd *,int))
-		Hooks::scanPattern("AddEntryToComboBox", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x64\xA1\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x30\x53\x8B\x5D\x08\x56\x57\x6A\x0C\x8B\xF1\xE8\x00\x00\x00\x00\x8B\xF8", "??????xxxx????x????xxxx????xxxxxxxxxxxxxx????xx");
+		_ScanPattern("AddEntryToComboBox", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x64\xA1\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x30\x53\x8B\x5D\x08\x56\x57\x6A\x0C\x8B\xF1\xE8\x00\x00\x00\x00\x8B\xF8", "??????xxxx????x????xxxx????xxxxxxxxxxxxxx????xx");
 
 	origWaDDX_Control =
 		(void (__stdcall *)(CDataExchange *,int,CWnd*))
-		Hooks::scanPattern("WaDDX_Control", "\x55\x8B\xEC\x57\x8B\x7D\x10\x83\x7F\x20\x00\x75\x77\x8B\xCF\xE8\x00\x00\x00\x00\x85\xC0\x75\x6C\x53\x8B\x5D\x0C", "??????xxxxxxxxxx????xxxxxxxx");
+		_ScanPattern("WaDDX_Control", "\x55\x8B\xEC\x57\x8B\x7D\x10\x83\x7F\x20\x00\x75\x77\x8B\xCF\xE8\x00\x00\x00\x00\x85\xC0\x75\x6C\x53\x8B\x5D\x0C", "??????xxxxxxxxxx????xxxxxxxx");
 
-	origGetTextById = (char *(__stdcall *)(int))
-			Hooks::scanPattern("GetTextById", "\xA1\x00\x00\x00\x00\x85\xC0\x8B\x54\x24\x04\x74\x14\x8B\x48\x08\x83\x3C\x91\x00\x8D\x0C\x91\x74\x08\x8B\x40\x04\x03\x01\xC2\x04\x00", "??????xxxxxxxxxxxxxxxxxxxxxxxxxxx");
+	origGetTextById =
+		(char *(__stdcall *)(int))
+		_ScanPattern("GetTextById", "\xA1\x00\x00\x00\x00\x85\xC0\x8B\x54\x24\x04\x74\x14\x8B\x48\x08\x83\x3C\x91\x00\x8D\x0C\x91\x74\x08\x8B\x40\x04\x03\x01\xC2\x04\x00", "??????xxxxxxxxxxxxxxxxxxxxxxxxxxx");
 
 	origPlaySound =
-			(int (__stdcall *)(const char *))
-			Hooks::scanPattern("PlaySound", "\x64\xA1\x00\x00\x00\x00\x6A\xFF\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x08\xE8\x00\x00\x00\x00\x33\xC9\x85\xC0\x0F\x95\xC1\x85\xC9\x75\x0A\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x10\x53", "??????xxx????xxxx????xxxx????xxxxxxxxxxxx????x????xxx");
+		(int (__stdcall *)(const char *))
+		Hooks::scanPattern("PlaySound", "\x64\xA1\x00\x00\x00\x00\x6A\xFF\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x08\xE8\x00\x00\x00\x00\x33\xC9\x85\xC0\x0F\x95\xC1\x85\xC9\x75\x0A\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x10\x53", "??????xxx????xxxx????xxxx????xxxxxxxxxxxx????x????xxx");
 
-	DWORD addrKeyCodes = Hooks::scanPattern("KeyCodes", "\x0F\xBE\xC0\x05\x00\x00\x00\x00\x69\xC0\x00\x00\x00\x00\x3D\x00\x00\x00\x00\x0F\x87\x00\x00\x00\x00\x0F\x84\x00\x00\x00\x00\x3D\x00\x00\x00\x00\x77\x5A", "????????xx????x????xx????xx????x????xx");
-	Hooks::hook("FrontendChangeScreen", addrFrontendChangeScreen, (DWORD *) &hookChangeScreen, (DWORD *) &origChangeScreen);
-	Hooks::hook("KeyCodes", addrKeyCodes, (DWORD *) &hookKeyCodes, (DWORD *) &origKeyCodes);
-//	Hooks::hook("GetTextById", addrGetTextById, (DWORD *) &hookGetTextById, (DWORD *) &origGetTextById);
+	DWORD addrGetLocalizedCString = _ScanPattern("GetLocalizedCString", "\x8B\x0D\x00\x00\x00\x00\x85\xC9\x74\x13\x8B\x41\x08\x83\x3C\x90\x00\x8D\x04\x90\x74\x07\x8B\x49\x04\x03\x08\xEB\x24\x8B\x0D\x00\x00\x00\x00\x85\xC9\x74\x13", "??????xxxxxxxxxxxxxxxxxxxxxxxxx????xxxx");
+//	setHelpText =
+//		(int (__fastcall *)(CWnd *,int,int,int,int))
+//		_ScanPattern("SetHelpText", "\x55\x8B\xEC\x83\xE4\xF8\x64\xA1\x00\x00\x00\x00\x6A\xFF\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x08\x53\x56\x57\x68\x00\x00\x00\x00\x8B\xD9\xE8\x00\x00\x00\x00\x8B\xF0\x85\xF6", "??????xx????xxx????xxxx????xxxxxxx????xxx????xxxx");
+
+	origSetStaticTextValue = _ScanPattern("SetStaticTextValue", "\x64\xA1\x00\x00\x00\x00\x6A\xFF\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x8B\x44\x24\x10\x50\x8D\x4C\x24\x14\xE8\x00\x00\x00\x00\x8D\x54\x24\x10", "??????xxx????xxxx????xxxxxxxxxx????xxxx");
+	DWORD addrKeyCodes = _ScanPattern("KeyCodes", "\x0F\xBE\xC0\x05\x00\x00\x00\x00\x69\xC0\x00\x00\x00\x00\x3D\x00\x00\x00\x00\x0F\x87\x00\x00\x00\x00\x0F\x84\x00\x00\x00\x00\x3D\x00\x00\x00\x00\x77\x5A", "????????xx????x????xx????xx????x????xx");
+
+	DWORD addrMapThumbnailOnMouseMove = _ScanPattern("MapThumbnailOnMouseMove", "\x55\x8B\xEC\x83\xE4\xF8\xA1\x00\x00\x00\x00\x56\x8B\xF1\x3B\x86\x00\x00\x00\x00\x57\x74\x2D\x8B\x4E\x20\x51\xFF\x15\x00\x00\x00\x00\x50\xE8\x00\x00\x00\x00", "??????x????xxxxx????xxxxxxxxx????xx????");
+	addrCurrentHelpText = *(DWORD**)(addrMapThumbnailOnMouseMove + 0x7);
+	CWndFromHandle = (CWnd *(__stdcall *)(int))(addrMapThumbnailOnMouseMove + 0x27 + *(DWORD*)(addrMapThumbnailOnMouseMove + 0x23));
+	CWndGetDlgItem = (CWnd *(__fastcall *)(CWnd *,int,int))(addrMapThumbnailOnMouseMove + 0x33 + *(DWORD*)(addrMapThumbnailOnMouseMove + 0x2F));
+	debugf("addrCWndFromHandle: 0x%X addrCWndGetDlgItem: 0x%X\n", CWndFromHandle, CWndGetDlgItem);
+
+	_HookDefault(FrontendChangeScreen);
+	_HookDefault(KeyCodes);
+	_HookDefault(GetLocalizedCString);
+	_HookDefault(MapThumbnailOnMouseMove);
+
+//	Hookf("GetTextById", addrGetTextById, (DWORD *) &hookGetTextById, (DWORD *) &origGetTextById);
 //	for(int i=0; i < 2103; i++) {
 //		printf("i: %d str: |%s|\n", i, origGetTextById(i));
 //	}
@@ -160,3 +221,4 @@ int Frontend::getCurrentScreen() {
 void Frontend::registerChangeScreenCallback(void(__stdcall * callback)(int screen)) {
 	changeScreenCallbacks.push_back(callback);
 }
+

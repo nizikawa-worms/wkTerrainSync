@@ -14,6 +14,7 @@
 #include <sstream>
 #include <Base64.h>
 #include "Utils.h"
+#include "Debugf.h"
 
 namespace fs = std::filesystem;
 typedef unsigned char byte;
@@ -24,12 +25,16 @@ void Protocol::install() {
 
 std::string Protocol::dumpTerrainInfo() {
 	auto & terrainInfo = TerrainList::getLastTerrainInfo();
-	nlohmann::json data;
-	data["type"] = "TerrainInfo";
-	data["hash"] = terrainInfo.hash;
-	data["name"] = terrainInfo.name;
-	Config::addVersionInfoToJson(data);
-	return data.dump();
+	if(terrainInfo) {
+		nlohmann::json data;
+		data["type"] = "TerrainInfo";
+		data["hash"] = terrainInfo->hash;
+		data["name"] = terrainInfo->name;
+		Config::addVersionInfoToJson(data);
+		return data.dump();
+	} else {
+		return "";
+	}
 }
 
 std::string Protocol::encodeMsg(std::string data) {
@@ -58,9 +63,9 @@ void Protocol::parseMsgHost(DWORD hostThis, std::string data, int slot) {
 		}
 	} catch(std::exception & e) {
 		char buff[1024];
-		sprintf_s(buff, "wkTerrainSync host exception in data from player %s:\n%s", Packets::getNicknameBySlot(slot).c_str(), e.what());
-		printf("parseMsgHost exception: %s\n", e.what());
-		printf("Received message: |%s|\n", data.c_str());
+		_snprintf_s(buff, _TRUNCATE, "wkTerrainSync host exception in data from player %s:\n%s", Packets::getNicknameBySlot(slot).c_str(), e.what());
+		debugf("parseMsgHost exception: %s\n", e.what());
+		debugf("Received message: |%s|\n", data.c_str());
 		Frontend::callMessageBox(buff, 0, 0);
 	}
 }
@@ -84,15 +89,15 @@ void Protocol::parseMsgClient(std::string data, DWORD connection) {
 		}
 	} catch(std::exception & e) {
 		char buff[1024];
-		sprintf_s(buff, "wkTerrainSync client exception:\n%s", e.what());
-		printf("parseMsgClient exception: %s\n", e.what());
-		printf("Received message: |%s|\n", data.c_str());
+		_snprintf_s(buff, _TRUNCATE, "wkTerrainSync client exception:\n%s", e.what());
+		debugf("parseMsgClient exception: %s\n", e.what());
+		debugf("Received message: |%s|\n", data.c_str());
 		Frontend::callMessageBox(buff, 0, 0);
 	}
 }
 
 void Protocol::handleTerrainInfo(const std::string & data, const nlohmann::json &parsed) {
-	printf("Received TerrainInfo packet: %s\n", data.c_str());
+	debugf("Received TerrainInfo packet: %s\n", data.c_str());
 	std::string thash = parsed["hash"];
 	if(thash.empty()) {
 		throw std::runtime_error("Received TerrainInfo with empty hash. This is a bug. Data: " + data);
@@ -100,11 +105,10 @@ void Protocol::handleTerrainInfo(const std::string & data, const nlohmann::json 
 	if (!TerrainList::setLastTerrainInfoByHash(thash)) {
 		char buff[512];
 		if (Config::isDownloadAllowed()) {
-
 			if(requestedHashes.find(thash) == requestedHashes.end()) {
 				requestedHashes.insert(thash);
-				printf("Requesting terrain files!\n");
-				sprintf_s(buff, "Requesting terrain files from host. Terrain: %s hash: %s", std::string(parsed["name"]).c_str(), std::string(parsed["hash"]).c_str());
+				debugf("Requesting terrain files!\n");
+				_snprintf_s(buff, _TRUNCATE, "Requesting terrain files from host. Terrain: %s hash: %s", std::string(parsed["name"]).c_str(), std::string(parsed["hash"]).c_str());
 				LobbyChat::lobbyPrint(buff);
 				nlohmann::json response;
 				response["type"] = "TerrainRequest";
@@ -113,8 +117,8 @@ void Protocol::handleTerrainInfo(const std::string & data, const nlohmann::json 
 				Packets::sendDataToHost(response.dump());
 			}
 		} else {
-			printf("Terrain file is missing, but terrain download is disabled in .ini\n");
-			sprintf_s(buff, "The terrain file is missing: %s hash: %s installed, but terrain download is disabled in .ini", std::string(parsed["name"]).c_str(), std::string(parsed["hash"]).c_str());
+			debugf("Terrain file is missing, but terrain download is disabled in .ini\n");
+			_snprintf_s(buff, _TRUNCATE, "The terrain file is missing: %s hash: %s installed, but terrain download is disabled in .ini", std::string(parsed["name"]).c_str(), std::string(parsed["hash"]).c_str());
 			LobbyChat::lobbyPrint(buff);
 		}
 	}
@@ -122,10 +126,10 @@ void Protocol::handleTerrainInfo(const std::string & data, const nlohmann::json 
 
 
 void Protocol::handleTerrainRequest(DWORD hostThis, nlohmann::json & parsed, int slot) {
-	printf("Parsing terrain request\n");
+	debugf("Parsing terrain request\n");
 	char buff[512];
 	if(!Config::isUploadAllowed()) {
-		sprintf_s(buff, "Player %s has sent a terrain file request, but terrain upload is disabled in .ini", Packets::getNicknameBySlot(slot).c_str());
+		_snprintf_s(buff, _TRUNCATE, "Player %s has sent a terrain file request, but terrain upload is disabled in .ini", Packets::getNicknameBySlot(slot).c_str());
 		LobbyChat::lobbyPrint(buff);
 		return;
 	}
@@ -139,19 +143,20 @@ void Protocol::handleTerrainRequest(DWORD hostThis, nlohmann::json & parsed, int
 		throw std::runtime_error("handleTerrainRequest: Terrain hash not found: " + terrainHash);
 
 	auto & terrainInfo = it->second;
-	std::string path = "data\\level\\" + terrainInfo.dirname + "\\";
+	auto path = terrainInfo->dirpath;
+
 	nlohmann::json metadata;
-	metadata["terrainName"] = terrainInfo.name;
-	metadata["terrainHash"] = terrainInfo.hash;
+	metadata["terrainName"] = terrainInfo->name;
+	metadata["terrainHash"] = terrainInfo->hash;
 	Config::addVersionInfoToJson(metadata);
 
-	sprintf_s(buff, "Sending terrain files (%s) to player: %s", path.c_str(), Packets::getNicknameBySlot(slot).c_str());
+	_snprintf_s(buff, _TRUNCATE, "Sending terrain files (%s) to player: %s", path.string().c_str(), Packets::getNicknameBySlot(slot).c_str());
 	LobbyChat::lobbyPrint(buff);
 
-	sendFile(slot, path, "text.img", metadata);
-	if(terrainInfo.hasWaterDir)
-		sendFile(slot, path, "water.dir", metadata);
-	sendFile(slot, path, "level.dir", metadata);
+	sendTerrainFile(slot, path, "text.img", metadata);
+	if(terrainInfo->hasWaterDir)
+		sendTerrainFile(slot, path, "water.dir", metadata);
+	sendTerrainFile(slot, path, "level.dir", metadata);
 
 	nlohmann::json response;
 	response["type"] = "RescanTerrains";
@@ -160,13 +165,13 @@ void Protocol::handleTerrainRequest(DWORD hostThis, nlohmann::json & parsed, int
 
 	Packets::resendMapDataToClient(hostThis, slot);
 
-	printf("Processed terrain request");
+	debugf("Processed terrain request");
 }
 
 
-void Protocol::sendFile(int slot, std::string path, std::string filetype, nlohmann::json metadata) {
-	printf("sending file: %s %s\n", path.c_str(), filetype.c_str());
-	path += filetype;
+void Protocol::sendTerrainFile(int slot, std::filesystem::path dirpath, std::string filetype, nlohmann::json metadata) {
+	auto path = dirpath / filetype;
+	debugf("sending file: %s %s\n", path.string().c_str(), filetype.c_str());
 
 	auto fileSize = fs::file_size(path);
 	std::ifstream in(path, std::ios::binary);
@@ -188,7 +193,7 @@ void Protocol::sendFile(int slot, std::string path, std::string filetype, nlohma
 		}
 	} else {
 		Config::setUploadAllowed(false);
-		throw std::runtime_error("Failed to read terrain file - disabling upload functionality. File path: " + path);
+		throw std::runtime_error("Failed to read terrain file - disabling upload functionality. File path: " + path.string());
 	}
 }
 
@@ -268,11 +273,11 @@ void Protocol::handleTerrainChunk(nlohmann::json & parsed) {
 		fclose(f);
 
 		char buff[512];
-		printf("File download complete. Renaming %s to %s\n", pathwithsuffix.c_str(), path.c_str());
+		debugf("File download complete. Renaming %s to %s\n", pathwithsuffix.c_str(), path.c_str());
 		if(rename(pathwithsuffix.c_str(), path.c_str())) {
 			throw std::runtime_error("Failed to rename file " + pathwithsuffix + " as " + path);
 		}
-		sprintf_s(buff, "Downloaded terrain file: %s", path.c_str());
+		_snprintf_s(buff, _TRUNCATE, "Downloaded terrain file: %s", path.c_str());
 		LobbyChat::lobbyPrint(buff);
 	}
 	else {
@@ -287,7 +292,7 @@ void Protocol::sendWam(DWORD connection) {
 	auto & wam = Missions::getWamContents();
 	if(wam.empty()) return;
 
-	printf("Sending WAM to connection: 0x%X\n", connection);
+	debugf("Sending WAM to connection: 0x%X\n", connection);
 	nlohmann::json json;
 	json["type"] = "WamChunk";
 	json["fileSize"] = wam.size();;
@@ -324,7 +329,7 @@ void Protocol::handleWamChunk(nlohmann::json & parsed) {
 	}
 	wamContents += chunkData;
 	if(chunkOffset + chunkData.size() == fileSize) {
-		printf("WAM download complete.\n");
+		debugf("WAM download complete.\n");
 		static const int magiclen = 8;
 		if(wamContents.length() > magiclen) {
 			for(int i=0; i < magiclen; i++) {
@@ -344,7 +349,7 @@ void Protocol::handleWamChunk(nlohmann::json & parsed) {
 void Protocol::sendResetWamToAllPlayers() {
 	DWORD hostThis = LobbyChat::getLobbyHostScreen();
 	if(!hostThis) {
-		printf("sendResetWamToAllPlayers - hostThis is null\n");
+		debugf("hostThis is null\n");
 		return;
 	}
 	nlohmann::json json;
@@ -359,7 +364,7 @@ void Protocol::sendResetWamToAllPlayers() {
 void Protocol::sendWamAttemptsToAllPlayers(int attempts) {
 	DWORD hostThis = LobbyChat::getLobbyHostScreen();
 	if(!hostThis) {
-		printf("sendResetWamToAllPlayers - hostThis is null\n");
+		debugf("hostThis is null\n");
 		return;
 	}
 	nlohmann::json json;
@@ -402,7 +407,7 @@ void Protocol::sendVersionInfoSlot(nlohmann::json &parsed, int slot) {
 void Protocol::sendVersionQueryToAllPlayers() {
 	DWORD hostThis = LobbyChat::getLobbyHostScreen();
 	if(!hostThis) {
-		printf("sendVersionQueryToAllPlayers - hostThis is null\n");
+		debugf("hostThis is null\n");
 		return;
 	}
 	nlohmann::json json;

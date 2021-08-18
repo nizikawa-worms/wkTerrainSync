@@ -25,6 +25,7 @@ LIBRARY_API void __stdcall Hooks_patchAsm(DWORD addr, unsigned char *op, size_t 
 // Replay.cpp
 LIBRARY_API void __stdcall Replay_registerLoadReplayCallback(void(__stdcall * callback)(const char * jsonstr));
 LIBRARY_API void __stdcall Replay_registerCreateReplayCallback(const char*(__stdcall * callback)(const char * jsonstr));
+LIBRARY_API void __stdcall Replay_registerHasDataToSaveCallback(int(__stdcall * callback)());
 
 //Frontend.cpp
 LIBRARY_API void __stdcall Frontend_registerChangeScreenCallback(void(__stdcall * callback)(int screen));

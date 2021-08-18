@@ -77,7 +77,7 @@ void Utils::tokenizeSet(std::string & str, const char* delim, std::set<std::stri
 	}
 }
 
-std::optional<std::string> Utils::readFile(std::string path) {
+std::optional<std::string> Utils::readFile(std::filesystem::path path) {
 	std::ifstream in(path, std::ios::binary);
 	if (in.good()) {
 		std::stringstream buffer;

@@ -16,69 +16,72 @@
 #include "MapGenerator.h"
 #include "Utils.h"
 #include "Missions.h"
-
+#include "Debugf.h"
+#include "Frontend.h"
 
 
 namespace fs = std::filesystem;
 DWORD (__stdcall *origTerrain0)(int a1, char* a2, char a3);
 DWORD __stdcall TerrainList::hookTerrain0(int a1, char *a2, char a3) {
+	if(terrainList.empty()) rescanTerrains();
+
 	auto ret = origTerrain0(a1, a2, a3);
-	auto terrain = *(DWORD *)(a1 + 1320);
+	DWORD terrainId = *(DWORD *) (a1 + 1320);
 //	printf("hookTerrain0: a1:0x%X a2: %s a3:0x%X ret:0x%X   terrainID:0x%X\n", a1, a2, a3, ret, terrain);
-	if(terrain != 0xFF && strcmp(a2, "data\\loading.thm") != 0) {
-		setLastTerrainInfoById(terrain);
-	}
-
-//	char * inputReplayPath = (char*)(W2App::getAddrGameinfoObject() + 0xDB60);
-//	if(inputReplayPath && strlen(inputReplayPath)) {
-//		Replay::loadTerrainInfo(inputReplayPath);
-//	}
-
-	auto v32 = *(DWORD *)(a1 + 1348);
-	int maxId = maxTerrain;
-	if(Packets::isHost() || (!Packets::isClient()))
-		maxId = terrainList.size();
-
 	auto mtype = (DWORD*)(a1 + 1364);
 	if(*mtype == 0) {
 		return 0;
 	}
+	if(*mtype == 1 || *mtype == 2) {
+		if (terrainId != 0xFF && strcmp(a2, "data\\loading.thm") != 0 && !Replay::isReplayPlaybackFlag()) {
+			setLastTerrainInfoById(terrainId);
+		}
+	} else {
+		resetLastTerrainInfo();
+	}
+
+	auto v32 = *(DWORD *)(a1 + 1348);
+	int maxId = maxDefaultTerrain;
+	if(Packets::isHost() || (!Packets::isClient()))
+		maxId = terrainList.size();
+
 
 	if((unsigned int)(v32 + 2) <= 3) {
-		int terrainId = *(DWORD *) (a1 + 1320);
-		if (Packets::isClient() && (terrainId > maxTerrain && terrainId != 0xFF)) {
+		if (Packets::isClient() && (terrainId > maxDefaultTerrain && terrainId != 0xFF)) {
 			char buff[512];
-			sprintf_s(buff, "Error: Map data contains invalid terrain ID (%d). The host might be using legacy wkTerrain38 which is not compatible with wkTerrainSync", terrainId);
+			_snprintf_s(buff, _TRUNCATE, "Error: Map data contains invalid terrain ID (%d). The host might be using legacy wkTerrain38 which is not compatible with wkTerrainSync", terrainId);
 			LobbyChat::lobbyPrint(buff);
 		}
 	}
 	return (unsigned int)(v32 + 2) <= 3
-		   && (*(DWORD *)(a1 + 1320) <= maxId || (*(DWORD *)(a1 + 1320) == 0xFF && !lastTerrainInfo.hash.empty() ))
+		   && (terrainId <= maxId || (terrainId == 0xFF && lastTerrainInfo) || (Replay::isReplayPlaybackFlag() && lastTerrainInfo))
 		   && *(DWORD *)(a1 + 1352) <= 0x12Cu
 		   && (v32 < 0 || !*(DWORD *)(a1 + 1324));
 }
 
 char * (__fastcall *origTerrain2)(int a1);
 char * __fastcall TerrainList::hookTerrain2(int id) {
+	if(terrainList.empty()) rescanTerrains();
+
 	static char buff[MAX_PATH];
 	std::string datapath = WaLibc::getWaDataPath();
-	if(id > maxTerrain) {
-		if(!lastTerrainInfo.dirname.empty()) {
-			sprintf_s(buff, "%s%s", terrainDir.c_str(), lastTerrainInfo.dirname.c_str());
+	if(id > maxDefaultTerrain) {
+		if(lastTerrainInfo) {
+			_snprintf_s(buff, _TRUNCATE, "%s", lastTerrainInfo->dirpath.string().c_str());
 //			printf("hookTerrain2: %d (%X) -> %s (lastTerrainInfo)\n", id, id, buff);
 			return buff;
 		} else {
-			printf("hookTerrain2: Magic terrainId specified, but lastTerrainInfo is null\n");
-			sprintf_s(buff, "%s\\level\\%s", datapath.c_str(), terrainList[0].c_str()); // load first terrain instead of crashing
+			debugf("Magic terrainId specified, but lastTerrainInfo is null\n");
+			_snprintf_s(buff, _TRUNCATE, "%s\\level\\%s", datapath.c_str(), terrainList[0].first.c_str()); // load first terrain instead of crashing
 			return buff;
 		}
 	} else {
 		if(id < 0 || id > terrainList.size()) {
-			printf("hookTerrain2: Invalid terrain id %d (0x%X)\n", id, id);
-			sprintf_s(buff, "%s\\level\\%s", datapath.c_str(), terrainList[0].c_str()); //// load first terrain instead of crashing
+			debugf("Invalid terrain id %d (0x%X)\n", id, id);
+			_snprintf_s(buff, _TRUNCATE, "%s\\level\\%s", datapath.c_str(), terrainList[0].first.c_str()); //// load first terrain instead of crashing
 			return buff;
 		}
-		sprintf_s(buff, "%s\\level\\%s", datapath.c_str(), terrainList[id].c_str());
+		_snprintf_s(buff, _TRUNCATE, "%s\\level\\%s", datapath.c_str(), terrainList[id].first.c_str());
 //		printf("hookTerrain2: %d -> %s\n", id, buff);
 		return buff;
 	}
@@ -92,6 +95,7 @@ void TerrainList::hookTerrainRandomSeed(int a2) {
 	_asm mov a1, esi
 	_asm push a2
 	_asm call origTerrainRandomSeed
+	Frontend::refreshMapThumbnailHelpText((CWnd*)a1);
 }
 
 
@@ -103,9 +107,18 @@ void __stdcall TerrainList::hookWriteMapThumbnail(int a1) {
 		int newTerrain = rand() % terrainList.size();
 
 		if((GetAsyncKeyState(VK_CONTROL) & 0x8000) && !customTerrains.empty())
-			newTerrain = maxTerrain + 1 +( rand() % (customTerrains.size()));
+			newTerrain = maxDefaultTerrain + 1 + (rand() % (customTerrains.size()));
 		else if((GetAsyncKeyState(VK_MENU) & 0x8000))
-			newTerrain = rand() % (maxTerrain + 1);
+			newTerrain = rand() % (maxDefaultTerrain + 1);
+
+		// force map style
+		for(int i=1; i < 8; i++) {
+			if((GetAsyncKeyState(0x30 + i) & 0x8000)) {
+				*(DWORD *)(a1 + 1316) = (i & 7) >= 4;
+				*(DWORD *)(a1 + 1328) = i & 3;
+				break;
+			}
+		}
 
 		unsigned int flags = 0;
 		if(GetAsyncKeyState(0x44) & 0x8000) {
@@ -116,7 +129,7 @@ void __stdcall TerrainList::hookWriteMapThumbnail(int a1) {
 		*terrainId = newTerrain;
 		setLastTerrainInfoById(newTerrain);
 
-//		printf("hookWriteMapThumbnail: Replacing terrain id: %d (0x%X) -> %d (0x%X)\n", oldTerrain, oldTerrain, newTerrain, newTerrain);
+//		debugf("Replacing terrain id: %d (0x%X) -> %d (0x%X)\n", oldTerrain, oldTerrain, newTerrain, newTerrain);
 	}
 	origWriteMapThumbnail(a1);
 	if(flagReseedTerrain) {
@@ -127,6 +140,7 @@ void __stdcall TerrainList::hookWriteMapThumbnail(int a1) {
 
 DWORD (__stdcall *origTerrain3)(int a1, char *a2, char *a3);
 DWORD __stdcall TerrainList::hookTerrain3(int a1, char *a2, char *a3) {
+	if(terrainList.empty()) rescanTerrains();
 //	printf("hookTerrain3: a1: 0x%X a2: %s a3: %s\n", a1, a2, a3);
 	if(!strcmp(a2, "Custom\\"))
 		return origTerrain3(a1, a2, a3);
@@ -137,22 +151,24 @@ DWORD __stdcall TerrainList::hookTerrain3(int a1, char *a2, char *a3) {
 
 	for(int i = 0 ; i < terrainList.size(); i++) {
 		auto buff = (char*)WaLibc::waMalloc(0x100);
-		*(v6 - 256) = (DWORD*)buff;
-		snprintf(buff, 0x100, "data\\%s%s\\text.img", a2, terrainList[i].c_str());
-		// code for CD edition compatibility
 		char buff2[MAX_PATH];
-		if(i <= maxTerrain)
-			sprintf_s(buff2, "%s\\%s%s\\text.img", datapath.c_str(), a2, terrainList[i].c_str());
-		else
-			sprintf_s(buff2, 0x100, "data\\%s%s\\text.img", a2, terrainList[i].c_str());
+		*(v6 - 256) = (DWORD*)buff;
+		auto & info = terrainList[i].second;
+
+		if(info->custom) {
+			snprintf(buff, 0x100, "%s", (info->dirpath / "text.img").string().c_str());
+		} else {
+			snprintf(buff, 0x100, "%s\\Level\\%s\\text.img", WaLibc::getWaDataPath().c_str(), info->name.c_str());
+		}
+		strcpy_s(buff2, buff);
 		DWORD v7;
 		callEditorLoadTextImg(v6, buff2, &v7);
 		if(v7) {
 			callEditorAddTerrain((DWORD*)(a1 +192), &v7);
 			count++;
 		} else {
+			debugf("Failed to load terrain text.img: %s buff: |%s|\n", terrainList[i].first.c_str(), buff);
 			WaLibc::waFree(buff);
-			printf("Failed to load terrain text.img: %s\n", terrainList[i].c_str());
 		}
 		v6++;
 	}
@@ -182,37 +198,28 @@ void __stdcall TerrainList::callEditorAddTerrain(DWORD * a1, DWORD * a2) {
 //}
 
 bool TerrainList::setLastTerrainInfoById(int newTerrain) {
-	lastTerrainInfo.clear();
-	if(newTerrain > maxTerrain) {
-		if(newTerrain < terrainList.size()) {
-			auto dirname = terrainList[newTerrain];
-			for(auto & it : customTerrains) {
-				auto & terrainInfo = it.second;
-				if (terrainInfo.dirname == dirname) {
-					lastTerrainInfo = terrainInfo;
-					printf("setLastTerrainInfoById: id: %d (0x%X) info: %s\n", newTerrain, newTerrain, lastTerrainInfo.toString().c_str());
-					return true;
-				}
-			}
-		}
-		printf("setLastTerrainInfoById FAILURE: id: %d (0x%X) info: %s\n", newTerrain, newTerrain, lastTerrainInfo.toString().c_str());
+	if(terrainList.empty()) rescanTerrains();
+	resetLastTerrainInfo();
+	if(newTerrain < 0 || newTerrain > terrainList.size()) {
+		debugf("invalid terrain id: %d\n", newTerrain);
 		return false;
-	} else {
-		printf("setLastTerrainInfoById: id: %d (0x%X) cleared - normal terrain\n", newTerrain, newTerrain);
-		return true;
 	}
+	lastTerrainInfo = terrainList[newTerrain].second;
+	debugf("id %d = %s\n", newTerrain, lastTerrainInfo->toString().c_str());
+	return true;
 }
 
 bool TerrainList::setLastTerrainInfoByHash(std::string md5) {
-	lastTerrainInfo.clear();
-	auto it = customTerrains.find(md5);
-	if(it != customTerrains.end()) {
-		auto & terrainInfo = it->second;
-		printf("Found terrain by hash! %s\n", terrainInfo.toString().c_str());
-		lastTerrainInfo = terrainInfo;
+	if(terrainList.empty()) rescanTerrains();
+	resetLastTerrainInfo();
+	auto it = std::find_if(terrainList.begin(), terrainList.end(), [&md5](const std::pair<std::string, std::shared_ptr<TerrainInfo>>& element){ return element.second->hash == md5;});
+	if(it != terrainList.end()) {
+		lastTerrainInfo = it->second;
+		debugf("Found terrain by hash! %s\n", lastTerrainInfo->toString().c_str());
 		return true;
-	} else {
-		printf("Failed to find terrain by hash: %s\n", md5.c_str());
+	}
+	else {
+		debugf("Failed to find terrain by hash: %s\n", md5.c_str());
 		return false;
 	}
 }
@@ -220,19 +227,29 @@ bool TerrainList::setLastTerrainInfoByHash(std::string md5) {
 
 void TerrainList::rescanTerrains() {
 	customTerrains.clear();
-	terrainList = standardTerrains;
-	printf("Scanning custom terrains\n");
-
+	terrainList.clear();
+	auto wadatapath = WaLibc::getWaDataPath();
+	if(wadatapath.empty()) {
+		debugf("WA data path not set - rescanTerrains delayed...\n");
+		return;
+	}
+	for(auto & name : standardTerrains) {
+		terrainList.push_back({name, std::shared_ptr<TerrainInfo>(new TerrainInfo{false, name, std::filesystem::path(wadatapath) / "Level" / name, name, false})});
+	}
+	debugf("Scanning custom terrains\n");
 	for (const auto & entry : fs::recursive_directory_iterator(terrainDir)) {
 		if(!entry.is_regular_file()) continue;
+//		if(entry.depth() > 1) continue;
 		auto filename = entry.path().filename().string();
 		std::transform(filename.begin(), filename.end(), filename.begin(), [](unsigned char c){ return std::tolower(c);});
 		if(filename == "level.dir") {
-			auto dirname = entry.path().parent_path().filename().string();
-			if(std::find(terrainList.begin(), terrainList.end(), dirname) == terrainList.end()) {
+			auto parent = entry.path().parent_path();
+			auto dirname = parent.filename().string();
+			auto it = std::find_if(terrainList.begin(), terrainList.end(), [&dirname](const std::pair<std::string, std::shared_ptr<TerrainInfo>>& element){ return element.second->name == dirname;} );
+			if(it == terrainList.end()) {
 				auto id = terrainList.size();
-				terrainList.push_back(dirname);
-				auto hash = computeTerrainHash(dirname);
+//				terrainList.push_back(dirname);
+				auto hash = computeTerrainHash(entry.path().parent_path());
 				std::string name = dirname.substr(0, dirname.find(" #", 0));
 				if(name.empty())
 					name = dirname;
@@ -241,54 +258,49 @@ void TerrainList::rescanTerrains() {
 					hasWater = true;
 					fclose(fw);
 				}
-				customTerrains[hash] = TerrainInfo{name, dirname, hash, hasWater};
-				printf("\t %d (0x%X): %s\n", id, id, customTerrains[hash].toString().c_str());
+				auto info = std::shared_ptr<TerrainInfo>(new TerrainInfo{true, name, parent, hash, hasWater});
+				customTerrains[hash] = info;
+				terrainList.push_back({name, info});
+				debugf("\t %d (0x%X): %s\n", id, id, info->toString().c_str());
 			}
 		}
 	}
 	patchTerrain4();
+//	int i =0;
+//	for(auto & entry : terrainList) {
+//		debugf("i: %d entry: %s\n", i, entry.second->toString().c_str());
+//		i++;
+//	}
 }
 
-std::string TerrainList::computeTerrainHash(std::string dirname) {
+std::string TerrainList::computeTerrainHash(std::filesystem::path dirname) {
 	Chocobo1::MD5 md5;
-	auto level = Utils::readFile(terrainDir + dirname + "/level.dir");
+	auto level = Utils::readFile(dirname / "level.dir");
 	if(level) {
 		md5.addData((*level).c_str(), (*level).size());
 	}
-	auto water = Utils::readFile(terrainDir + dirname + "/water.dir");
+	auto water = Utils::readFile(dirname / "water.dir");
 	if(water)
 		md5.addData((*water).c_str(), (*water).size());
 	md5.finalize();
 	return md5.toString();
 }
 
-const std::vector<std::string> &TerrainList::getTerrainList() {
-	return terrainList;
-}
-
-const std::map<std::string, TerrainList::TerrainInfo> &TerrainList::getCustomTerrains() {
-	return customTerrains;
-}
-
-TerrainList::TerrainInfo &TerrainList::getLastTerrainInfo() {
-	return lastTerrainInfo;
-}
 
 DWORD addrAddTerrainsOnRebuildWindow;
 void TerrainList::patchTerrain4() {
 	static std::vector<const char*> terrainPtrList;
 	terrainPtrList.clear();
 	for(auto & it : terrainList) {
-		terrainPtrList.push_back(it.c_str());
+		terrainPtrList.push_back(it.first.c_str());
 	}
 	void * ptr = terrainPtrList.data();
 
 	unsigned char size1 = terrainPtrList.size();
 	unsigned int size2 = size1;
-	Hooks::patchAsm(addrTerrain4 + 0x1B9, &size1, sizeof(size1));
-	Hooks::patchAsm(addrTerrain4 +0x207, (unsigned char*)&ptr, sizeof(DWORD));
-
-	Hooks::patchAsm(addrAddTerrainsOnRebuildWindow +0xAA, (unsigned char*)&size2, sizeof(size2));
+	_PatchAsm(addrTerrain4 + 0x1B9, &size1, sizeof(size1));
+	_PatchAsm(addrTerrain4 + 0x207, (unsigned char*)&ptr, sizeof(DWORD));
+	_PatchAsm(addrAddTerrainsOnRebuildWindow + 0xAA, (unsigned char*)&size2, sizeof(size2));
 }
 
 void (__stdcall *origMapTypeChecks)();
@@ -297,20 +309,15 @@ void __stdcall TerrainList::hookMapTypeChecks() {
 	_asm mov sesi, esi
 
 	MapGenerator::onMapTypeChecks(sesi);
-
 	DWORD mtype = *(DWORD*)(sesi + 0x554);
 	if(Config::isExperimentalMapTypeCheck() && !Replay::isReplayPlaybackFlag()) {
-		if(mtype == 3 || (mtype <= 2 && *(DWORD*)(sesi+528) <= maxTerrain)) {
-			printf("mtype: %d sesi: %d\n", mtype, *(DWORD*)(sesi+528));
-			if(!lastTerrainInfo.hash.empty()) {
-				printf("hookMapTypeChecks: clearing lastTerrainInfo\n");
+		if(mtype == 3 || (mtype <= 2 && *(DWORD*)(sesi+528) <= maxDefaultTerrain)) {
+			if(lastTerrainInfo) {
+				debugf("clearing lastTerrainInfo\n");
+				resetLastTerrainInfo();
 			}
-			lastTerrainInfo.clear();
 		}
 	}
-	// 2 random map
-	// 1 BIT
-	// 3 PNG
 
 	_asm mov esi, sesi
 	_asm call origMapTypeChecks
@@ -322,7 +329,7 @@ void TerrainList::onLoadReplay(nlohmann::json &json) {
 		if(!thash.empty()) {
 			if(!TerrainList::setLastTerrainInfoByHash(json["hash"])) {
 				char buff[2048];
-				sprintf_s(buff, "This replay file was recorded using a custom terrain which is currently not installed in your WA directory.\nYou will need to obtain the terrain files in order to play this replay.\nSorry about that.\n\nTerrain metadata: %s", json.dump(4).c_str());
+				_snprintf_s(buff, _TRUNCATE, "This replay file was recorded using a custom terrain which is currently not installed in your WA directory.\nYou will need to obtain the terrain files in order to play this replay.\nSorry about that.\n\nTerrain metadata: %s", json.dump(4).c_str());
 				MessageBoxA(0, buff, Config::getFullStr().c_str(), MB_OK | MB_ICONERROR);
 			}
 		}
@@ -330,44 +337,123 @@ void TerrainList::onLoadReplay(nlohmann::json &json) {
 }
 
 void TerrainList::onCreateReplay(nlohmann::json & json) {
-	if(lastTerrainInfo.hash.empty() && lastTerrainInfo.name.empty()) return;
-	json["name"] = lastTerrainInfo.name;
-	json["hash"] = lastTerrainInfo.hash;
+	if(!lastTerrainInfo) return;
+	json["name"] = lastTerrainInfo->name;
+	json["hash"] = lastTerrainInfo->hash;
+}
+
+DWORD addrQuickCPUTerrain_ret;
+int __stdcall TerrainList::hookQuickCPUTerrain_c() {
+	if(terrainList.empty()) rescanTerrains();
+	auto seed = (DWORD*)addrWaSeed;
+	DWORD v4 = *seed;
+	WaLibc::waSrand(*seed);
+	DWORD v5 = WaLibc::waRand() << 16;
+	*seed = v5 + WaLibc::waRand();
+	DWORD terrain = v4 % 0x1D;
+
+	if(!Replay::isReplayPlaybackFlag()) {
+		DWORD cterrain = v4 % terrainList.size();
+		if((GetAsyncKeyState(VK_CONTROL) & 0x8000) && !customTerrains.empty())
+			cterrain = maxDefaultTerrain + 1 + (v4 % (customTerrains.size()));
+		else if ((GetAsyncKeyState(VK_MENU) & 0x8000))
+			cterrain = terrain;
+		if(cterrain >= 0x1D && Config::isUseCustomTerrainsInSinglePlayerMode()) {
+			setLastTerrainInfoById(cterrain);
+			return cterrain;
+		} else {
+			resetLastTerrainInfo();
+			return terrain;
+		}
+	} else {
+		if(!lastTerrainInfo || !lastTerrainInfo->custom) {return terrain;}
+		else {return 0xFF;}
+	}
+}
+
+void __declspec(naked) hookQuickCPUTerrain() {
+	_asm call TerrainList::hookQuickCPUTerrain_c
+	_asm mov esi, eax
+	_asm jmp addrQuickCPUTerrain_ret
 }
 
 
+char* (__stdcall *origGetMapEditorTerrainPath)();
+char* TerrainList::hookGetMapEditorTerrainPath_c(DWORD a1) {
+	static char buff[MAX_PATH];
+	int id = (*(int (__thiscall **)(DWORD))(*(DWORD *)(a1 + 84) + 44))(a1 + 84);
+	auto info = terrainList[id].second;
+	_snprintf_s(buff, _TRUNCATE, "%s", info->dirpath.string().c_str());
+	return buff;
+}
+char* __stdcall TerrainList::hookGetMapEditorTerrainPath() {
+	DWORD a1;
+	_asm mov a1, eax
+	return hookGetMapEditorTerrainPath_c(a1);
+}
+
+char *(__fastcall *origSetBuiltinMap)(void *mapname, DWORD a2);
+char *__fastcall hookSetBuiltinMap(void *mapname, DWORD a2) {
+	TerrainList::resetLastTerrainInfo();
+	return origSetBuiltinMap(mapname, a2);
+}
+
 void TerrainList::install(){
-	DWORD addrTerrainRandomSeed= Hooks::scanPattern("TerrainRandomSeed", "\x83\xEC\x0C\x80\x7C\x24\x00\x00\x53\x55\x57\x74\x79\x6A\x10\xFF\x15\x00\x00\x00\x00\x66\x85\xC0\x7D\x31\x8B\x86\x00\x00\x00\x00\x8B\x8E\x00\x00\x00\x00\x68\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\x51\xE8\x00\x00\x00\x00", "xxxxxx??xxxxxxxxx????xxxxxxx????xx????x????x????xxx????");
-//	DWORD addrTerrainRandomSeedIdModifier = Hooks::scanPattern("TerrainRandomSeedIdModifier", "\x8B\x02\x83\xF8\x01\x7D\x40\x83\xF9\x1A\x75\x1A\xF7\xD8\x1B\xC0\x83\xE0\xFD\x83\xC0\x01\x89\x02\xC1\xE0\x10\x03\xC1\x8B\x4C\x24\x04\x89\x01\xC2\x04\x00", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
-	DWORD addrWriteMapThumbnail = Hooks::scanPattern("WriteMapThumbnail", "\x83\xEC\x38\x53\x8B\x5C\x24\x40\x55\x56\x57\x6A\x00\x68\x00\x00\x00\x00\x6A\x02\x6A\x00\x6A\x00\x68\x00\x00\x00\x00\x68\x00\x00\x00\x00\xFF\x15\x00\x00\x00\x00\x8B\xF0\x83\xFE\xFF", "??????xxxxxxxx????xxxxxxx????x????xx????xxxxx");
+	DWORD addrTerrainRandomSeed= _ScanPattern("TerrainRandomSeed", "\x83\xEC\x0C\x80\x7C\x24\x00\x00\x53\x55\x57\x74\x79\x6A\x10\xFF\x15\x00\x00\x00\x00\x66\x85\xC0\x7D\x31\x8B\x86\x00\x00\x00\x00\x8B\x8E\x00\x00\x00\x00\x68\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\x51\xE8\x00\x00\x00\x00", "xxxxxx??xxxxxxxxx????xxxxxxx????xx????x????x????xxx????");
+//	DWORD addrTerrainRandomSeedIdModifier = ScanPatternf("TerrainRandomSeedIdModifier", "\x8B\x02\x83\xF8\x01\x7D\x40\x83\xF9\x1A\x75\x1A\xF7\xD8\x1B\xC0\x83\xE0\xFD\x83\xC0\x01\x89\x02\xC1\xE0\x10\x03\xC1\x8B\x4C\x24\x04\x89\x01\xC2\x04\x00", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+	DWORD addrWriteMapThumbnail = _ScanPattern("WriteMapThumbnail", "\x83\xEC\x38\x53\x8B\x5C\x24\x40\x55\x56\x57\x6A\x00\x68\x00\x00\x00\x00\x6A\x02\x6A\x00\x6A\x00\x68\x00\x00\x00\x00\x68\x00\x00\x00\x00\xFF\x15\x00\x00\x00\x00\x8B\xF0\x83\xFE\xFF", "??????xxxxxxxx????xxxxxxx????x????xx????xxxxx");
 
-	DWORD addrTerrain0 =  Hooks::scanPattern("Terrain0", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x53\x8B\x5D\x08\x56", "??????xxx????xx????xxxx????xx????x????xxxxx");
-	DWORD addrTerrain2Reference = Hooks::scanPattern("Terrain2_Ref",  "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\xA1\x00\x00\x00\x00\x8B\x0D\x00\x00\x00\x00\x8B\x15\x00\x00\x00\x00\x89\x84\x24\x00\x00\x00\x00", "???????xx????xxxx????xx????x????xx????xx????xxx????");
+	DWORD addrTerrain0 =  _ScanPattern("Terrain0", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x53\x8B\x5D\x08\x56", "??????xxx????xx????xxxx????xx????x????xxxxx");
+	DWORD addrTerrain2Reference = _ScanPattern("Terrain2_Ref", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\xA1\x00\x00\x00\x00\x8B\x0D\x00\x00\x00\x00\x8B\x15\x00\x00\x00\x00\x89\x84\x24\x00\x00\x00\x00", "???????xx????xxxx????xx????x????xx????xx????xxx????");
 	DWORD addrTerrain2 = addrTerrain2Reference + 0xC10 + *(DWORD*)(addrTerrain2Reference + 0xC0C);
-	DWORD addrTerrain3 =  Hooks::scanPattern("Terrain3", "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x0C\x8B\x45\x08\x53\x56\x05\x00\x00\x00\x00\x57\x89\x44\x24\x0C\xC7\x44\x24\x00\x00\x00\x00\x00\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00", "??????xxxxxxxxx????xxxxxxxx?????x????x????");
-	addrTerrain4 = Hooks::scanPattern("Terrain4", "\x55\x8B\xEC\x83\xE4\xF8\x64\xA1\x00\x00\x00\x00\x6A\xFF\x68\x00\x00\x00\x00\x50\x8B\x45\x0C\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x20\x85\xC0\x53\x56\x57\x8B\xD9\x74\x63", "??????xx????xxx????xxxxxxx????xxxxxxxxxxxx");
-	addrAddTerrainsOnRebuildWindow = Hooks::scanPattern("AddTerrainsOnRebuildWindow", "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x08\x53\x55\x8B\xD9\x83\xBB\x00\x00\x00\x00\x00\x56\x57\x75\x0B\xA1\x00\x00\x00\x00\x89\x44\x24\x14\xEB\x11\x8B\x8B\x00\x00\x00\x00\x8B\x01\x8B\x40\x18", "??????xxxxxxxxx?????xxxxx????xxxxxxxx????xxxxx");
-
-	DWORD addrMapTypeChecks = Hooks::scanPattern("MapTypeChecks", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\xA1\x00\x00\x00\x00\x8B\x0D\x00\x00\x00\x00", "???????xx????xxxx????xx????x????xx????");
-
+	DWORD addrTerrain3 =  _ScanPattern("Terrain3", "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x0C\x8B\x45\x08\x53\x56\x05\x00\x00\x00\x00\x57\x89\x44\x24\x0C\xC7\x44\x24\x00\x00\x00\x00\x00\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00", "??????xxxxxxxxx????xxxxxxxx?????x????x????");
+	addrTerrain4 = _ScanPattern("Terrain4", "\x55\x8B\xEC\x83\xE4\xF8\x64\xA1\x00\x00\x00\x00\x6A\xFF\x68\x00\x00\x00\x00\x50\x8B\x45\x0C\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x20\x85\xC0\x53\x56\x57\x8B\xD9\x74\x63", "??????xx????xxx????xxxxxxx????xxxxxxxxxxxx");
+	addrAddTerrainsOnRebuildWindow = _ScanPattern("AddTerrainsOnRebuildWindow", "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x08\x53\x55\x8B\xD9\x83\xBB\x00\x00\x00\x00\x00\x56\x57\x75\x0B\xA1\x00\x00\x00\x00\x89\x44\x24\x14\xEB\x11\x8B\x8B\x00\x00\x00\x00\x8B\x01\x8B\x40\x18", "??????xxxxxxxxx?????xxxxx????xxxxxxxx????xxxxx");
+	DWORD addrMapTypeChecks = _ScanPattern("MapTypeChecks", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\xA1\x00\x00\x00\x00\x8B\x0D\x00\x00\x00\x00", "???????xx????xxxx????xx????x????xx????");
+	DWORD addrQuickCPUTerrain = _ScanPattern("QuickCPUTerrain", "\xA1\x00\x00\x00\x00\x83\xF8\x2B\x56\x57\x7D\x5C\x83\xF8\xFC\x74\x57\x8B\x35\x00\x00\x00\x00\x56\xE8\x00\x00\x00\x00\x83\xC4\x04", "??????xxxxxxxxxxxxx????xx????xxx");
+	DWORD addrGetMapEditorTerrainPath = _ScanPattern("GetMapEditorTerrainPath", "\x56\x8B\xF0\x8B\x46\x54\x8B\x50\x2C\x8D\x4E\x54\x57\x33\xFF\xFF\xD2\x8B\x96\x00\x00\x00\x00\x85\xD2\x75\x04\x33\xC9\xEB\x0B\x8B\x8E\x00\x00\x00\x00\x2B\xCA\xC1\xF9\x02", "??????xxxxxxxxxxxxx????xxxxxxxxxx????xxxxx");
+	DWORD addrSetBuiltinMap = _ScanPattern("SetBuiltinMap", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x53\x8B\x5D\x08\x56\x8B\xB3\x00\x00\x00\x00\x85\xF6\x57\x8B\xF9\x74\x27\x8B\x06\x83\xE8\x10\x8D\x48\x0C\x83\xCA\xFF", "??????xxx????xx????xxxx????xx????x????xxxxxxx????xxxxxxxxxxxxxxxxxx");
 	DWORD off1 = *(DWORD*)(addrTerrain3 + 0x103);
 	origEditorLoadTextImg = addrTerrain3 + 0x107 + off1;
 	origEditorAddTerrain = addrTerrain3 + 0x121 + *(DWORD*)(addrTerrain3 + 0x11D);
-	printf("origEditorLoadTextImg: 0x%X origEditorAddTerrain: 0x%X\n", origEditorLoadTextImg, origEditorAddTerrain);
+	debugf("origEditorLoadTextImg: 0x%X origEditorAddTerrain: 0x%X\n", origEditorLoadTextImg, origEditorAddTerrain);
 
-	Hooks::hook("Terrain0", addrTerrain0, (DWORD *) &hookTerrain0, (DWORD *) &origTerrain0);
-	Hooks::hook("Terrain2", addrTerrain2, (DWORD *) &hookTerrain2, (DWORD *) &origTerrain2);
-	Hooks::hook("Terrain3", addrTerrain3, (DWORD *) &hookTerrain3, (DWORD *) &origTerrain3);
-//	Hooks::hook("Terrain4", addrTerrain4, (DWORD*) &hookTerrain4, (DWORD*)&origTerrain4);
+	_HookDefault(Terrain0);
+	_HookDefault(Terrain2);
+	_HookDefault(Terrain3);
+//	Hook("Terrain4", addrTerrain4, (DWORD*) &hookTerrain4, (DWORD*)&origTerrain4);
+	_HookDefault(TerrainRandomSeed);
+	_HookDefault(WriteMapThumbnail);
+//	Hook("TerrainRandomSeedIdModifier", addrTerrainRandomSeedIdModifier, (DWORD*) &hookTerrainRandomSeedIdModifier, (DWORD*)&origTerrainRandomSeedIdModifier);
+	_HookDefault(MapTypeChecks);
+	_HookDefault(GetMapEditorTerrainPath);
+	_HookDefault(SetBuiltinMap);
 
-	Hooks::hook("TerrainRandomSeed", addrTerrainRandomSeed, (DWORD *) &hookTerrainRandomSeed, (DWORD *) &origTerrainRandomSeed);
-	Hooks::hook("WriteMapThumbnail", addrWriteMapThumbnail, (DWORD *) &hookWriteMapThumbnail, (DWORD *) &origWriteMapThumbnail);
-//	Hooks::minhook("TerrainRandomSeedIdModifier", addrTerrainRandomSeedIdModifier, (DWORD*) &hookTerrainRandomSeedIdModifier, (DWORD*)&origTerrainRandomSeedIdModifier);
-	Hooks::hook("MapTypeChecks", addrMapTypeChecks, (DWORD *) &hookMapTypeChecks, (DWORD *) &origMapTypeChecks);
+	addrWaSeed = *(DWORD*)(addrQuickCPUTerrain + 0x13);
+	DWORD addrQuickCPUTerrains_patch1 = addrQuickCPUTerrain + 0X68;
+	addrQuickCPUTerrain_ret = addrQuickCPUTerrain + 0x9C;
+	debugf("addrQuickCPUTerrains_patch1: 0x%X ret: 0x%X waseed: 0x%X\n", addrQuickCPUTerrains_patch1, hookQuickCPUTerrain, addrWaSeed);
+	_HookAsm(addrQuickCPUTerrains_patch1, (DWORD) &hookQuickCPUTerrain);
 }
 
 void TerrainList::onFrontendExit() {
-	lastTerrainInfo.clear();
+	resetLastTerrainInfo();
+}
+
+const std::shared_ptr<TerrainList::TerrainInfo> &TerrainList::getLastTerrainInfo() {
+	return lastTerrainInfo;
+}
+
+const std::map<std::string, std::shared_ptr<TerrainList::TerrainInfo>> &TerrainList::getCustomTerrains() {
+	return customTerrains;
+}
+
+const std::vector<std::pair<std::string, std::shared_ptr<TerrainList::TerrainInfo>>> &TerrainList::getTerrainList() {
+	return terrainList;
+}
+
+void TerrainList::resetLastTerrainInfo() {
+	lastTerrainInfo = nullptr;
 }
 
 

@@ -31,6 +31,7 @@ private:
 	static inline bool dontRenameSchemeComboBox = false;
 	static inline bool dontCreateMissionDirs = false;
 	static inline bool dontConvertMissionFiles = false;
+	static inline bool useCustomTerrainsInSinglePlayerMode = false;
 
 	static inline std::filesystem::path waDir;
 
@@ -94,6 +95,8 @@ public:
 	static bool isSpriteOverrideAllowed();
 	static bool isAdditionalParallaxLayersAllowed();
 	static bool isDontRenameSchemeComboBox();
+
+	static bool isUseCustomTerrainsInSinglePlayerMode();
 
 	static const std::filesystem::path &getWaDir();
 
