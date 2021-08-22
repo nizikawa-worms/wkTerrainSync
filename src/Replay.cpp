@@ -167,7 +167,11 @@ void Replay::loadReplay(char *replayName) {
 
 int (__stdcall *origLoadReplay)(int a1, int a2);
 int __stdcall Replay::hookLoadReplay(int a1, int a2) {
-//	MessageBoxA(0, "Load replay", "Load replay", 0);
+	if(Config::isReplayMsgBox()) {
+		char buff[256];
+		_snprintf_s(buff, _TRUNCATE, "Load replay - WA PID: %d", GetCurrentProcessId());
+		MessageBoxA(0, buff, buff, 0);
+	}
 	char * filename = (char*)(a1 + 0xDB60);
 	debugf("params: 0x%X , 0x%s\n", a1, filename);
 	loadReplay(filename);

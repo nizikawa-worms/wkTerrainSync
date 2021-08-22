@@ -62,9 +62,11 @@ int __fastcall Packets::hookClientLobbyPacketHandler(DWORD This, DWORD EDX, unsi
 		Protocol::parseMsgClient(std::string((char*)packet, size), This);
 		return 0;
 	} else {
-		auto ret = origClientLobbyPacketHandler(This, 0, packet, size);
 		if(ptype == Protocol::terrainPacketID) {
 			MapGenerator::onTerrainPacket(This, 0, packet, size);
+		}
+		auto ret = origClientLobbyPacketHandler(This, 0, packet, size);
+		if(ptype == Protocol::terrainPacketID) {
 			clientOnTerrainPacket(This, 0, packet, size);
 		}
 		return ret;
@@ -86,9 +88,11 @@ int __fastcall Packets::hookClientEndscreenPacketHandler(DWORD This, DWORD EDX, 
 		Protocol::parseMsgClient(std::string((char*)packet, size), This);
 		return 0;
 	} else {
-		auto ret = origClientEndscreenPacketHandler(This, 0, packet, size);
 		if(ptype == Protocol::terrainPacketID) {
 			MapGenerator::onTerrainPacket(This, 0, packet, size);
+		}
+		auto ret = origClientEndscreenPacketHandler(This, 0, packet, size);
+		if(ptype == Protocol::terrainPacketID) {
 			clientOnTerrainPacket(This, 0, packet, size);
 		}
 		return ret;

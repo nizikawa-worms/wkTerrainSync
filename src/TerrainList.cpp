@@ -24,20 +24,19 @@ namespace fs = std::filesystem;
 DWORD (__stdcall *origTerrain0)(int a1, char* a2, char a3);
 DWORD __stdcall TerrainList::hookTerrain0(int a1, char *a2, char a3) {
 	if(terrainList.empty()) rescanTerrains();
-
 	auto ret = origTerrain0(a1, a2, a3);
+	auto mtype = (DWORD*)(a1 + 1364);
 	DWORD terrainId = *(DWORD *) (a1 + 1320);
 //	printf("hookTerrain0: a1:0x%X a2: %s a3:0x%X ret:0x%X   terrainID:0x%X\n", a1, a2, a3, ret, terrain);
-	auto mtype = (DWORD*)(a1 + 1364);
 	if(*mtype == 0) {
 		return 0;
 	}
-	if(*mtype == 1 || *mtype == 2) {
+	if(*mtype == 1 || *mtype == 2 || (*mtype & 0xFF) == MapGenerator::magicMapType) {
 		if (terrainId != 0xFF && strcmp(a2, "data\\loading.thm") != 0 && !Replay::isReplayPlaybackFlag()) {
-			setLastTerrainInfoById(terrainId);
+			setLastTerrainInfoById(terrainId, __CALLPOSITION__);
 		}
 	} else {
-		resetLastTerrainInfo();
+		resetLastTerrainInfo(__CALLPOSITION__);
 	}
 
 	auto v32 = *(DWORD *)(a1 + 1348);
@@ -53,10 +52,12 @@ DWORD __stdcall TerrainList::hookTerrain0(int a1, char *a2, char a3) {
 			LobbyChat::lobbyPrint(buff);
 		}
 	}
-	return (unsigned int)(v32 + 2) <= 3
+	ret = (unsigned int)(v32 + 2) <= 3
 		   && (terrainId <= maxId || (terrainId == 0xFF && lastTerrainInfo) || (Replay::isReplayPlaybackFlag() && lastTerrainInfo))
 		   && *(DWORD *)(a1 + 1352) <= 0x12Cu
 		   && (v32 < 0 || !*(DWORD *)(a1 + 1324));
+	debugf("return: %d\n", ret);
+	return ret;
 }
 
 char * (__fastcall *origTerrain2)(int a1);
@@ -127,7 +128,7 @@ void __stdcall TerrainList::hookWriteMapThumbnail(int a1) {
 		MapGenerator::setFlagExtraFeatures(flags);
 		Missions::onMapReset();
 		*terrainId = newTerrain;
-		setLastTerrainInfoById(newTerrain);
+		setLastTerrainInfoById(newTerrain, __CALLPOSITION__);
 
 //		debugf("Replacing terrain id: %d (0x%X) -> %d (0x%X)\n", oldTerrain, oldTerrain, newTerrain, newTerrain);
 	}
@@ -197,9 +198,10 @@ void __stdcall TerrainList::callEditorAddTerrain(DWORD * a1, DWORD * a2) {
 //	return ret;
 //}
 
-bool TerrainList::setLastTerrainInfoById(int newTerrain) {
+bool TerrainList::setLastTerrainInfoById(int newTerrain, const char * callposition) {
+	if(callposition) debugf("Call from: %s\n", callposition);
 	if(terrainList.empty()) rescanTerrains();
-	resetLastTerrainInfo();
+	resetLastTerrainInfo(__CALLPOSITION__);
 	if(newTerrain < 0 || newTerrain > terrainList.size()) {
 		debugf("invalid terrain id: %d\n", newTerrain);
 		return false;
@@ -209,9 +211,10 @@ bool TerrainList::setLastTerrainInfoById(int newTerrain) {
 	return true;
 }
 
-bool TerrainList::setLastTerrainInfoByHash(std::string md5) {
+bool TerrainList::setLastTerrainInfoByHash(std::string md5, const char * callposition) {
+	if(callposition) debugf("Call from: %s\n", callposition);
 	if(terrainList.empty()) rescanTerrains();
-	resetLastTerrainInfo();
+	resetLastTerrainInfo(__CALLPOSITION__);
 	auto it = std::find_if(terrainList.begin(), terrainList.end(), [&md5](const std::pair<std::string, std::shared_ptr<TerrainInfo>>& element){ return element.second->hash == md5;});
 	if(it != terrainList.end()) {
 		lastTerrainInfo = it->second;
@@ -223,6 +226,15 @@ bool TerrainList::setLastTerrainInfoByHash(std::string md5) {
 		return false;
 	}
 }
+
+void TerrainList::resetLastTerrainInfo(const char * callposition) {
+	if(callposition) debugf("Call from: %s\n", callposition);
+	if(lastTerrainInfo) {
+		debugf("Resetting lastTerrainInfo (previous value %s)\n", lastTerrainInfo->name.c_str());
+	}
+	lastTerrainInfo = nullptr;
+}
+
 
 
 void TerrainList::rescanTerrains() {
@@ -314,7 +326,7 @@ void __stdcall TerrainList::hookMapTypeChecks() {
 		if(mtype == 3 || (mtype <= 2 && *(DWORD*)(sesi+528) <= maxDefaultTerrain)) {
 			if(lastTerrainInfo) {
 				debugf("clearing lastTerrainInfo\n");
-				resetLastTerrainInfo();
+				resetLastTerrainInfo(__CALLPOSITION__);
 			}
 		}
 	}
@@ -327,7 +339,7 @@ void TerrainList::onLoadReplay(nlohmann::json &json) {
 	if(json.contains("hash")) {
 		std::string thash = json["hash"];
 		if(!thash.empty()) {
-			if(!TerrainList::setLastTerrainInfoByHash(json["hash"])) {
+			if(!TerrainList::setLastTerrainInfoByHash(json["hash"], __CALLPOSITION__)) {
 				char buff[2048];
 				_snprintf_s(buff, _TRUNCATE, "This replay file was recorded using a custom terrain which is currently not installed in your WA directory.\nYou will need to obtain the terrain files in order to play this replay.\nSorry about that.\n\nTerrain metadata: %s", json.dump(4).c_str());
 				MessageBoxA(0, buff, Config::getFullStr().c_str(), MB_OK | MB_ICONERROR);
@@ -359,10 +371,10 @@ int __stdcall TerrainList::hookQuickCPUTerrain_c() {
 		else if ((GetAsyncKeyState(VK_MENU) & 0x8000))
 			cterrain = terrain;
 		if(cterrain >= 0x1D && Config::isUseCustomTerrainsInSinglePlayerMode()) {
-			setLastTerrainInfoById(cterrain);
+			setLastTerrainInfoById(cterrain, __CALLPOSITION__);
 			return cterrain;
 		} else {
-			resetLastTerrainInfo();
+			resetLastTerrainInfo(__CALLPOSITION__);
 			return terrain;
 		}
 	} else {
@@ -396,7 +408,7 @@ char* __stdcall TerrainList::hookGetMapEditorTerrainPath() {
 
 char *(__fastcall *origSetBuiltinMap)(void *mapname, DWORD a2);
 char *__fastcall hookSetBuiltinMap(void *mapname, DWORD a2) {
-	TerrainList::resetLastTerrainInfo();
+	TerrainList::resetLastTerrainInfo(__CALLPOSITION__);
 	return origSetBuiltinMap(mapname, a2);
 }
 
@@ -439,7 +451,7 @@ void TerrainList::install(){
 }
 
 void TerrainList::onFrontendExit() {
-	resetLastTerrainInfo();
+	resetLastTerrainInfo(__CALLPOSITION__);
 }
 
 const std::shared_ptr<TerrainList::TerrainInfo> &TerrainList::getLastTerrainInfo() {
@@ -453,10 +465,3 @@ const std::map<std::string, std::shared_ptr<TerrainList::TerrainInfo>> &TerrainL
 const std::vector<std::pair<std::string, std::shared_ptr<TerrainList::TerrainInfo>>> &TerrainList::getTerrainList() {
 	return terrainList;
 }
-
-void TerrainList::resetLastTerrainInfo() {
-	lastTerrainInfo = nullptr;
-}
-
-
-

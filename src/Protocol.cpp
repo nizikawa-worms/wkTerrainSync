@@ -15,6 +15,7 @@
 #include <Base64.h>
 #include "Utils.h"
 #include "Debugf.h"
+#include "Hooks.h"
 
 namespace fs = std::filesystem;
 typedef unsigned char byte;
@@ -102,7 +103,7 @@ void Protocol::handleTerrainInfo(const std::string & data, const nlohmann::json 
 	if(thash.empty()) {
 		throw std::runtime_error("Received TerrainInfo with empty hash. This is a bug. Data: " + data);
 	}
-	if (!TerrainList::setLastTerrainInfoByHash(thash)) {
+	if (!TerrainList::setLastTerrainInfoByHash(thash, __CALLPOSITION__)) {
 		char buff[512];
 		if (Config::isDownloadAllowed()) {
 			if(requestedHashes.find(thash) == requestedHashes.end()) {

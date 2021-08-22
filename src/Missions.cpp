@@ -453,6 +453,10 @@ void Missions::install() {
 	addrMissionTitleMap = *(DWORD*)(addrGetMissionTitle + 0xCF);
 	addrMissionDescriptionMap = *(DWORD*)(addrGetMissionDescription + 0x112);
 
+	DWORD addrReplayLimitCpuIQ = _ScanPattern("ReplayLimitCpuIQ", "\x0F\xBE\xC0\xF7\xD8\x83\xF8\x64\x0F\x9E\xC1\x84\xC9\x75\x1B", "xxxxxxx?xxxxxxx");
+	char patchiq[] = {0x7F};
+	_PatchAsm(addrReplayLimitCpuIQ + 0x7, (unsigned char*)&patchiq, sizeof(patchiq));
+
 	debugf("addrLoadWAMFile: 0x%X addrWAMLoaderParams: 0x%X\naddrLobbyTeamList: 0x%X addrNumberOfTeams: 0x%X\naddrAmmoTable: 0x%X addrPlayerInfoStruct: 0x%X addrMissionTitleMap: 0x%X addrMissionDescriptionMap: 0x%X\n",
 		   addrLoadWAMFile, addrWAMLoaderParams, addrLobbyTeamList,addrNumberOfTeams, addrAmmoTable,  addrPlayerInfoStruct, addrMissionTitleMap, addrMissionDescriptionMap);
 	_HookDefault(LoadWAMFile);

@@ -12,43 +12,45 @@ void Config::readConfig() {
 	char wabuff[MAX_PATH];
 	GetModuleFileNameA(0, (LPSTR)&wabuff, sizeof(wabuff));
 	waDir = fs::path(wabuff).parent_path();
+	auto inipath = (waDir / iniFile).string();
+	moduleEnabled = GetPrivateProfileIntA("general", "EnableModule", 1, inipath.c_str());
+	useOffsetCache = GetPrivateProfileIntA("general", "UseOffsetCache", 1, inipath.c_str());
 
-	moduleEnabled = GetPrivateProfileIntA("general", "EnableModule", 1, iniFile.c_str());
+	downloadAllowed = GetPrivateProfileIntA("general", "AllowTerrainDownload", 1, inipath.c_str());
+	uploadAllowed = GetPrivateProfileIntA("general", "AllowTerrainUpload", 1, inipath.c_str());
+	customWaterAllowed = GetPrivateProfileIntA("general", "AllowCustomWater", 1, inipath.c_str());
+	spriteOverrideAllowed = GetPrivateProfileIntA("general", "AllowCustomSprites", 1, inipath.c_str());
+	additionalParallaxLayersAllowed = GetPrivateProfileIntA("general", "AllowAdditionalParallaxLayers", 1, inipath.c_str());
 
-	downloadAllowed = GetPrivateProfileIntA("general", "AllowTerrainDownload", 1, iniFile.c_str());
-	uploadAllowed = GetPrivateProfileIntA("general", "AllowTerrainUpload", 1, iniFile.c_str());
-	customWaterAllowed = GetPrivateProfileIntA("general", "AllowCustomWater", 1, iniFile.c_str());
-	spriteOverrideAllowed = GetPrivateProfileIntA("general", "AllowCustomSprites", 1, iniFile.c_str());
-	additionalParallaxLayersAllowed = GetPrivateProfileIntA("general", "AllowAdditionalParallaxLayers", 1, iniFile.c_str());
+	ignoreVersionCheck = GetPrivateProfileIntA("general", "IgnoreVersionCheck", 0, inipath.c_str());
 
-	ignoreVersionCheck = GetPrivateProfileIntA("general", "IgnoreVersionCheck", 0, iniFile.c_str());
+	greentextEnabled = GetPrivateProfileIntA("general", "EnableLobbyGreentext", 1, inipath.c_str());
+	experimentalMapTypeCheck = GetPrivateProfileIntA("general", "UseExperimentalMapTypeCheck", 1, inipath.c_str());
+	messageBoxEnabled = GetPrivateProfileIntA("general", "UseFrontendMessageBox", 1, inipath.c_str());
+	nagMessageEnabled = GetPrivateProfileIntA("general", "SendNagMessage", 1, inipath.c_str());
+	showInstalledTerrains = GetPrivateProfileIntA("general", "ShowInstalledTerrainsInChat", 0, inipath.c_str());
+	thumbnailColor = GetPrivateProfileIntA("general", "MapThumbnailColor", 191, inipath.c_str());
+	printMapScaleInChat = GetPrivateProfileIntA("general", "PrintMapScaleInChat", 1, inipath.c_str());
+	useCustomTerrainsInSinglePlayerMode = GetPrivateProfileIntA("general", "UseCustomTerrainsInSinglePlayerMode", 1, inipath.c_str());
 
-	greentextEnabled = GetPrivateProfileIntA("general", "EnableLobbyGreentext", 1, iniFile.c_str());
-	experimentalMapTypeCheck = GetPrivateProfileIntA("general", "UseExperimentalMapTypeCheck", 1, iniFile.c_str());
-	messageBoxEnabled = GetPrivateProfileIntA("general", "UseFrontendMessageBox", 1, iniFile.c_str());
-	nagMessageEnabled = GetPrivateProfileIntA("general", "SendNagMessage", 1, iniFile.c_str());
-	showInstalledTerrains = GetPrivateProfileIntA("general", "ShowInstalledTerrainsInChat", 0, iniFile.c_str());
-	thumbnailColor = GetPrivateProfileIntA("general", "MapThumbnailColor", 191, iniFile.c_str());
-	printMapScaleInChat = GetPrivateProfileIntA("general", "PrintMapScaleInChat", 1, iniFile.c_str());
-	useCustomTerrainsInSinglePlayerMode = GetPrivateProfileIntA("general", "UseCustomTerrainsInSinglePlayerMode", 1, iniFile.c_str());
+	parallaxBackA = GetPrivateProfileIntA("parallax", "parallaxBackA", 9011200, inipath.c_str());
+	parallaxBackB = GetPrivateProfileIntA("parallax", "parallaxBackB", 42172416, inipath.c_str());
+	parallaxFrontA = GetPrivateProfileIntA("parallax", "parallaxFrontA", 65536, inipath.c_str());
+	parallaxFrontB = GetPrivateProfileIntA("parallax", "parallaxFrontB", 48003809, inipath.c_str());
+	parallaxHideOnBigMaps = GetPrivateProfileIntA("parallax", "HideOnBigMaps", 1, inipath.c_str());
 
-	parallaxBackA = GetPrivateProfileIntA("parallax", "parallaxBackA", 9011200, iniFile.c_str());
-	parallaxBackB = GetPrivateProfileIntA("parallax", "parallaxBackB", 42172416, iniFile.c_str());
-	parallaxFrontA = GetPrivateProfileIntA("parallax", "parallaxFrontA", 65536, iniFile.c_str());
-	parallaxFrontB = GetPrivateProfileIntA("parallax", "parallaxFrontB", 48003809, iniFile.c_str());
-	parallaxHideOnBigMaps = GetPrivateProfileIntA("parallax", "HideOnBigMaps", 1, iniFile.c_str());
+	devConsoleEnabled = GetPrivateProfileIntA("debug", "EnableDevConsole", 0, inipath.c_str());
+	hexDumpPackets = GetPrivateProfileIntA("debug", "HexDumpPackets", 0, inipath.c_str());
+	replayMsgBox = GetPrivateProfileIntA("debug", "MessageBoxOnReplayLoad", 0, inipath.c_str());
 
-	devConsoleEnabled = GetPrivateProfileIntA("debug", "EnableDevConsole", 1, iniFile.c_str());
-	hexDumpPackets = GetPrivateProfileIntA("debug", "HexDumpPackets", 0, iniFile.c_str());
+	superFrontendThumbnailFix = GetPrivateProfileIntA("fixes", "SuperFrontendFixMapThumbnail", 1, inipath.c_str());
+	dontRenameSchemeComboBox = GetPrivateProfileIntA("fixes", "DontRenameSchemeComboBox", 0, inipath.c_str());
 
-	superFrontendThumbnailFix = GetPrivateProfileIntA("fixes", "SuperFrontendFixMapThumbnail", 1, iniFile.c_str());
-	dontRenameSchemeComboBox = GetPrivateProfileIntA("fixes", "DontRenameSchemeComboBox", 0, iniFile.c_str());
-
-	dontCreateMissionDirs = GetPrivateProfileIntA("fixes", "DontCreateMissionDirs", 0, iniFile.c_str());
-	dontConvertMissionFiles = GetPrivateProfileIntA("fixes", "DontConvertMissionFiles", 0, iniFile.c_str());
+	dontCreateMissionDirs = GetPrivateProfileIntA("fixes", "DontCreateMissionDirs", 0, inipath.c_str());
+	dontConvertMissionFiles = GetPrivateProfileIntA("fixes", "DontConvertMissionFiles", 0, inipath.c_str());
 
 	char buff[2048];
-	GetPrivateProfileStringA("exceptions", "ExtendedBackSprLoader", "e27d433fcd8ac2e696f01437525f34c5,", buff, sizeof(buff), iniFile.c_str());
+	GetPrivateProfileStringA("exceptions", "ExtendedBackSprLoader", "e27d433fcd8ac2e696f01437525f34c5,", buff, sizeof(buff), inipath.c_str());
 	std::string buffstr(buff);
 	Utils::tokenizeSet(buffstr, ",", backSprExceptions);
 }
@@ -145,7 +147,7 @@ std::string Config::getModuleStr() {
 	return "wkTerrainSync";
 }
 std::string Config::getVersionStr() {
-	return "v1.2.1a";
+	return "v1.2.2";
 }
 
 std::string Config::getBuildStr() {
@@ -268,4 +270,19 @@ void Config::registerModuleInitializedCallback(void(__stdcall * callback)()) {
 
 bool Config::isUseCustomTerrainsInSinglePlayerMode() {
 	return useCustomTerrainsInSinglePlayerMode;
+}
+
+bool Config::isUseOffsetCache() {
+	return useOffsetCache;
+}
+
+std::string Config::getWaVersionAsString() {
+	char buff[32];
+	auto version = GetModuleVersion(0);
+	sprintf_s(buff, "%u.%u.%u.%u", PWORD(&version)[3], PWORD(&version)[2], PWORD(&version)[1], PWORD(&version)[0]);
+	return buff;
+}
+
+bool Config::isReplayMsgBox() {
+	return replayMsgBox;
 }

@@ -59,16 +59,15 @@ void MapGenerator::writeMagicMapTypeToThumbnail(int *mtype) {
 	if(*mtype != 2 && (*mtype & 0xFF) != magicMapType) {
 		return;
 	}
-
-	FILE * f = fopen((Config::getWaDir() / "data/current.thm").string().c_str(), "r+b");
+	FILE * f = WaLibc::origWaFopen((char*)"data\\current.thm", (char*)"r+b");
 	if(f) {
 		if(scaleXIncrements || scaleYIncrements) {
 			*mtype = encodeMagicMapType();
 		} else {
 			*mtype = 2;
 		}
-		fwrite(mtype, sizeof(int), 1, f);
-		fclose(f);
+		WaLibc::origWaFwrite(mtype, sizeof(int), 1, f);
+		WaLibc::origWaFclose(f);
 	}
 	if(Packets::isHost()) {
 		Packets::resendMapDataToAllClients();

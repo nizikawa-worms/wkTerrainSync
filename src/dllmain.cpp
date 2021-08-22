@@ -21,6 +21,7 @@
 #include "Scheme.h"
 #include "Missions.h"
 #include "Debugf.h"
+#include "Hooks.h"
 #include <chrono>
 
 void install() {
@@ -72,8 +73,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 			try {
 				Config::readConfig();
 				if (Config::isModuleEnabled() && Config::waVersionCheck() && LockCurrentInstance("wkTerrainSync")) {
+					Hooks::loadOffsets();
 					if (Config::isDevConsoleEnabled()) DevConsole::install();
 					install();
+					Hooks::saveOffsets();
 				}
 				finish = std::chrono::high_resolution_clock::now();
 			} catch (std::exception &e) {

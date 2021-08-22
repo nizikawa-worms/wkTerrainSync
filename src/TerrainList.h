@@ -59,9 +59,9 @@ public:
 
 	static void rescanTerrains();
 	static void install();
-	static bool setLastTerrainInfoById(int newTerrain);
-	static bool setLastTerrainInfoByHash(std::string md5);
-	static void resetLastTerrainInfo();
+	static bool setLastTerrainInfoById(int newTerrain, const char * callposition = nullptr);
+	static bool setLastTerrainInfoByHash(std::string md5, const char * callposition = nullptr);
+	static void resetLastTerrainInfo(const char * callposition = nullptr);
 	static void onFrontendExit();
 	static void onLoadReplay(nlohmann::json & config);
 	static void onCreateReplay(nlohmann::json &);

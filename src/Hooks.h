@@ -16,13 +16,14 @@
 
 class Hooks {
 private:
+	static inline const std::string cacheFile = "wkTerrainSync.cache";
 	static inline std::map<std::string, DWORD> hookNameToAddr;
 	static inline std::map<DWORD, std::string> hookAddrToName;
 
 	static inline std::map<std::string, DWORD> scanNameToAddr;
-	static inline std::map<DWORD, std::string> scanAddrToName;
 	static inline std::vector<std::unique_ptr<PLH::x86Detour>> detours;
 	static inline std::vector<std::unique_ptr<PLH::IatHook>> iathooks;
+	static inline bool foundNewOffsets = false;
 
 	//Worms development tools by StepS
 	template<typename VT>
@@ -52,7 +53,8 @@ public:
 #define _ScanPattern(name, pattern, mask) Hooks::scanPattern(name, pattern, mask, 0, __CALLPOSITION__ )
 
 	static const std::map<std::string, DWORD> &getScanNameToAddr();
-
+	static void loadOffsets();
+	static void saveOffsets();
 };
 
 

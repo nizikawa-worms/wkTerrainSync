@@ -15,8 +15,7 @@ void WaLibc::waFree(void *ptr) {
 	origWaFree(ptr);
 }
 
-FILE *(__cdecl *origWaFopen)(char *Filename, char *Mode);
-FILE *__cdecl hookWaFopen(char *Filename, char *Mode) {
+FILE *__cdecl WaLibc::hookWaFopen(char *Filename, char *Mode) {
 	if(!strcmp(Filename, "data\\Gfx\\Water.dir")) {
 		char buff[MAX_PATH];
 		auto terraininfo = TerrainList::getLastTerrainInfo();
@@ -56,6 +55,13 @@ int WaLibc::install() {
 	CStringBufferFromString =
 		(int (__fastcall *)(char **,int,char *,size_t))
 		_ScanPattern("CStringBufferFromString", "\x53\x56\x8B\x74\x24\x10\x85\xF6\x8B\xD9\x75\x0A\xE8\x00\x00\x00\x00\x5E\x5B\xC2\x08\x00\x8B\x4C\x24\x0C\x85\xC9\x75\x0A", "??????xxxxxxx????xxxxxxxxxxxxx");
+
+	origWaFwrite =
+		(int (__cdecl *)(const void *,size_t,size_t,FILE *))
+		_ScanPattern("WaFwrite", "\x6A\x0C\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x33\xF6\x39\x75\x0C\x74\x29\x39\x75\x10\x74\x24\x33\xC0\x39\x75\x14\x0F\x95\xC0", "???????x????xxxxxxxxxxxxxxxxxxxx");
+	origWaFclose =
+		(int (__cdecl *)(FILE *))
+		_ScanPattern("WaFclose", "\x6A\x0C\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x83\x4D\xE4\xFF\x33\xC0\x8B\x75\x08\x33\xFF\x3B\xF7\x0F\x95\xC0\x3B\xC7\x75\x1D\xE8\x00\x00\x00\x00\xC7\x00\x00\x00\x00\x00", "???????x????xxxxxxxxxxxxxxxxxxxxx????xx????");
 
 	_HookDefault(WaFopen);
 	return 0;

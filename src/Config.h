@@ -8,7 +8,7 @@
 
 class Config {
 public:
-	static inline const std::string iniFile = ".\\wkTerrainSync.ini";
+	static inline const std::string iniFile = "wkTerrainSync.ini";
 	static inline const std::string moduleName = "wkTerrainSync";
 
 private:
@@ -32,6 +32,8 @@ private:
 	static inline bool dontCreateMissionDirs = false;
 	static inline bool dontConvertMissionFiles = false;
 	static inline bool useCustomTerrainsInSinglePlayerMode = false;
+	static inline bool useOffsetCache = true;
+	static inline bool replayMsgBox = false;
 
 	static inline std::filesystem::path waDir;
 
@@ -95,13 +97,16 @@ public:
 	static bool isSpriteOverrideAllowed();
 	static bool isAdditionalParallaxLayersAllowed();
 	static bool isDontRenameSchemeComboBox();
-
 	static bool isUseCustomTerrainsInSinglePlayerMode();
+	static bool isReplayMsgBox();
 
 	static const std::filesystem::path &getWaDir();
 
 	static bool isDontCreateMissionDirs();
 	static bool isDontConvertMissionFiles();
+
+	static bool isUseOffsetCache();
+	static std::string getWaVersionAsString();
 
 	static int getModuleInitialized();
 	static void setModuleInitialized(int moduleInitialized);

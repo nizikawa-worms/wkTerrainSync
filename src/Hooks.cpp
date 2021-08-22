@@ -5,6 +5,9 @@
 #include "Debugf.h"
 #include <fstream>
 #include <format>
+#include "Utils.h"
+#include <json.hpp>
+#include <format>
 #include <polyhook2/CapstoneDisassembler.hpp>
 
 
@@ -159,9 +162,18 @@ void Hooks::hookVtable(const char * classname, int offset, DWORD addr, DWORD hoo
 }
 
 
-
 DWORD Hooks::scanPattern(const char *name, const char *pattern, const char* mask, DWORD expected, const char * line) {
-	auto ret= hl::FindPatternMask(pattern, mask);
+	auto it = scanNameToAddr.find(name);
+	uintptr_t ret = 0;
+	if(it != scanNameToAddr.end()) {
+		ret = it->second;
+	} else {
+		ret = hl::FindPatternMask(pattern, mask);
+		if(ret) {
+			foundNewOffsets = true;
+			scanNameToAddr[name] = ret;
+		}
+	}
 	if(!line) {
 		debugf("%s = 0x%X\n", name, ret);
 	} else {
@@ -175,4 +187,44 @@ DWORD Hooks::scanPattern(const char *name, const char *pattern, const char* mask
 
 const std::map<std::string, DWORD> &Hooks::getScanNameToAddr() {
 	return scanNameToAddr;
+}
+
+void Hooks::loadOffsets() {
+	if(!Config::isUseOffsetCache()) return;
+	auto cachepath = Config::getWaDir() / cacheFile;
+	auto data = Utils::readFile(cachepath);
+	if(data) {
+		try {
+			auto base = (DWORD) GetModuleHandle(0);
+			auto parsed = nlohmann::json::parse(*data);
+			auto waversion = Config::getWaVersionAsString();
+			if (parsed.contains(waversion)) {
+				auto offsets = parsed[waversion];
+				for (auto &it : offsets.items()) {
+					auto addr = (uintptr_t) it.value();
+					scanNameToAddr[it.key()] = base + addr - 0x400000;
+				}
+			}
+		} catch (std::exception & e) {
+			throw std::runtime_error(std::format("Failed to parse offsets cache. Reason: {}", e.what()));
+		}
+	}
+}
+
+void Hooks::saveOffsets() {
+	if(!foundNewOffsets || !Config::isUseOffsetCache()) return;
+	auto cachepath = Config::getWaDir() / cacheFile;
+	std::ofstream out(cachepath);
+	if (out.good()) {
+		nlohmann::json output;
+		nlohmann::json offsets;
+		auto base = (DWORD)GetModuleHandle(0);
+		for(auto & it : scanNameToAddr) {
+			offsets[it.first] = it.second - base + 0x400000;
+		}
+		auto waversion = Config::getWaVersionAsString();
+		output[waversion] = offsets;
+		out << output.dump(4);
+		out.close();
+	}
 }
