@@ -85,19 +85,6 @@ DWORD __fastcall Sprites::hookLoadSpriteFromVFS(DWORD DD_Display, int EDX, int p
 			if(terrainvfs) {
 				if(strcmp(filename, "debris.spr")) {
 					res = overrideSprite(DD_Display, palette, index, terrainvfs, filename);
-				} else {
-					overrideSprite(DD_Display, 1, waterSprId, terrainvfs, "water.spr");
-					res = 0;
-					BitmapImage * fillImg = overrideImg(DD_Display, terrainvfs, "fill.img", 1);
-					if(fillImg) {
-						auto gameglobal = *(DWORD*)(ddgame + 0x488);
-						if(gameglobal) {
-							int colorid = (*(int (__thiscall **)(BitmapImage *, DWORD, DWORD))(*(DWORD*)fillImg + 16))(fillImg,0,0);
-							customFillColor = colorid;
-							debugf("Setting custom water color from terrain dir\n Colorid: %d\n", colorid);
-						}
-						WaLibc::waFree(fillImg);
-					}
 				}
 			}
 		}
@@ -159,14 +146,6 @@ int Sprites::install() {
 	_HookDefault(DrawBackSprite);
 	_HookDefault(LoadSpriteFromVFS);
 	return 0;
-}
-
-int Sprites::getCustomFillColor() {
-	return customFillColor;
-}
-
-void Sprites::setCustomFillColor(int customFillColor) {
-	Sprites::customFillColor = customFillColor;
 }
 
 void Sprites::registerOnLoadSpriteFromVFSCallback(int(__stdcall * callback)(DWORD, int, int, int, int, const char*)) {

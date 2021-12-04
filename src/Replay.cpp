@@ -8,6 +8,7 @@
 #include "MapGenerator.h"
 #include "Missions.h"
 #include "Debugf.h"
+#include "Threads.h"
 
 Replay::ReplayOffsets Replay::extractReplayOffsets(char * replayName) {
 	ReplayOffsets offsets;
@@ -119,6 +120,7 @@ void Replay::loadReplay(char *replayName) {
 	debugf("file: %s\n", replayName);
 	auto offsets = extractReplayOffsets(replayName);
 	replayPlaybackFlag = true;
+	Threads::awaitDataScan();
 	if(TerrainList::getTerrainList().empty()) TerrainList::rescanTerrains();
 	FILE * f = fopen(replayName, "rb");
 	try {

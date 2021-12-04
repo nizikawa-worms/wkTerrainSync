@@ -8,12 +8,15 @@
 #include <json.hpp>
 #include <filesystem>
 #include <set>
+#include <format>
+#include <mutex>
 
 typedef unsigned long       DWORD;
 
 class TerrainList {
 public:
-	static inline const std::filesystem::path terrainDir = "data\\level\\";
+	static inline const std::filesystem::path terrainDir = "data\\Level\\";
+	static inline const std::filesystem::path legacyTerrainDir = "data\\Level_Legacy\\";
 
 	struct TerrainInfo {
 		bool custom;
@@ -21,8 +24,10 @@ public:
 		std::filesystem::path dirpath;
 		std::string hash;
 		bool hasWaterDir;
+		bool hasWaterDirOverride;
+		bool legacy;
 		std::string toString() const {
-			return "Name: " + name + " Dirpath: |" + dirpath.string() + "| Hash: " + hash + (hasWaterDir ? " (custom water.dir)" : "");
+			return std::format("Name: {} Dirpath: |{}| Hash: {} {} {} {}", name, dirpath.string(), hash, hasWaterDir ? "(custom water.dir)" : "",  hasWaterDirOverride ? "(override _water.dir)" : "", legacy ? "(legacy)" : "");
 		}
 	};
 	static const int maxDefaultTerrain = 0x1C;
@@ -32,8 +37,11 @@ private:
 	static inline bool flagReseedTerrain = false;
 	static const inline std::vector<std::string> standardTerrains = {"-Beach", "-Desert", "-Farm", "-Forest", "-Hell", "Art", "Cheese", "Construction", "Desert", "Dungeon", "Easter", "Forest", "Fruit", "Gulf", "Hell", "Hospital", "Jungle", "Manhattan", "Medieval", "Music", "Pirate", "Snow", "Space", "Sports", "Tentacle", "Time", "Tools", "Tribal", "Urban"};
 	static inline std::map<std::string, std::shared_ptr<TerrainInfo>> customTerrains;
-	static inline std::vector<std::pair<std::string, std::shared_ptr<TerrainInfo>>> terrainList;
 
+	static inline std::vector<std::pair<std::string, std::shared_ptr<TerrainInfo>>> terrainList;
+	static inline std::vector<std::pair<std::string, std::shared_ptr<TerrainInfo>>> terrainListWithoutLegacy;
+
+	static inline std::mutex terrainMutex;
 
 	static DWORD __stdcall hookTerrain0(int a1, char* a2, char a3);
 	static char* __fastcall hookTerrain2(int id);
@@ -55,8 +63,9 @@ private:
 	static inline DWORD addrWaSeed = 0;
 	static char* hookGetMapEditorTerrainPath_c(DWORD a1);
 	static char* __stdcall hookGetMapEditorTerrainPath();
-public:
 
+	static void scanTerrainDir(std::filesystem::path directory, bool legacy);
+public:
 	static void rescanTerrains();
 	static void install();
 	static bool setLastTerrainInfoById(int newTerrain, const char * callposition = nullptr);
@@ -69,6 +78,8 @@ public:
 	static const std::shared_ptr<TerrainInfo> &getLastTerrainInfo();
 	static const std::map<std::string, std::shared_ptr<TerrainInfo>> &getCustomTerrains();
 	static const std::vector<std::pair<std::string, std::shared_ptr<TerrainInfo>>> &getTerrainList();
+
+	static int randomTerrainId();
 };
 
 

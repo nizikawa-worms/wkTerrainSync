@@ -128,6 +128,7 @@ void Hooks::hookAsm(DWORD startAddr, DWORD hookAddr, const char * line) {
 	} else {
 		printf("%s hookAsm: 0x%X -> 0x%X\n", line, startAddr, hookAddr);
 	}
+	patches.push_back(std::make_unique<PatchInfo>(startAddr, std::string((const char*)startAddr, 6)));
 	InsertJump((PVOID)startAddr, 6, (PVOID)hookAddr, IJ_PUSHRET);
 }
 
@@ -147,6 +148,7 @@ void Hooks::patchAsm(DWORD addr, unsigned char * op, size_t opsize, const char *
 		}
 		printf("\n");
 	}
+	patches.push_back(std::make_unique<PatchInfo>(addr, std::string((const char*)addr, opsize)));
 	PatchMemData((PVOID)addr, opsize, (PVOID)op, opsize);
 }
 
@@ -158,6 +160,7 @@ void Hooks::hookVtable(const char * classname, int offset, DWORD addr, DWORD hoo
 	}
 	*original = *(DWORD*)addr;
 	int dest = hookAddr;
+	patches.push_back(std::make_unique<PatchInfo>(addr, std::string((const char*)addr, sizeof(DWORD))));
 	PatchMemData((PVOID)addr, sizeof(dest), &dest, sizeof(dest));
 }
 
@@ -227,4 +230,12 @@ void Hooks::saveOffsets() {
 		out << output.dump(4);
 		out.close();
 	}
+}
+
+void Hooks::cleanup() {
+	detours.clear();
+	iathooks.clear();
+	patches.clear();
+	hookAddrToName.clear();
+	hookNameToAddr.clear();
 }

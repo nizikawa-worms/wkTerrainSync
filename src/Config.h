@@ -68,6 +68,7 @@ public:
 	static int waVersionCheck();
 
 	static std::string getVersionStr();
+	static int getVersionInt();
 	static std::string getBuildStr();
 	static std::string getModuleStr();
 	static std::string getFullStr();

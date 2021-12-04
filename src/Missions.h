@@ -45,6 +45,7 @@ private:
 	static inline std::map<int, std::string> wamTeamGroupMap;
 	static inline int wamAttemptNumber = 0;
 	static inline int copyMissionFilesAttempts = 0;
+	static inline bool cpuClampBug = false;
 
 private:
 
@@ -76,6 +77,10 @@ private:
 	static void injectWamAndFixStuff();
 	static void setupTeamsInMission(int a1);
 	static void setTeamAmmo(int team, int weapon, short int ammo, short int delay);
+
+	static void hookCTaskCPUSkillClamp_patch1();
+	static void hookCTaskCPUSkillClamp_patch2();
+	static int __stdcall CTaskCPUSkillClamp_patch_c(int skill);
 public:
 	static void install();
 

@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <json.hpp>
+#include <memory>
 #include <sstream>
 #include <optional>
 #include "WaLibc.h"
@@ -18,16 +19,19 @@
 #include "Missions.h"
 #include "Debugf.h"
 #include "Frontend.h"
+#include "Threads.h"
 
 
 namespace fs = std::filesystem;
 DWORD (__stdcall *origTerrain0)(int a1, char* a2, char a3);
 DWORD __stdcall TerrainList::hookTerrain0(int a1, char *a2, char a3) {
+	Threads::awaitDataScan();
 	if(terrainList.empty()) rescanTerrains();
 	auto ret = origTerrain0(a1, a2, a3);
 	auto mtype = (DWORD*)(a1 + 1364);
 	DWORD terrainId = *(DWORD *) (a1 + 1320);
 //	printf("hookTerrain0: a1:0x%X a2: %s a3:0x%X ret:0x%X   terrainID:0x%X\n", a1, a2, a3, ret, terrain);
+	debugf("mtype: 0x%X id: 0x%X\n", *mtype, terrainId);
 	if(*mtype == 0) {
 		return 0;
 	}
@@ -62,6 +66,7 @@ DWORD __stdcall TerrainList::hookTerrain0(int a1, char *a2, char a3) {
 
 char * (__fastcall *origTerrain2)(int a1);
 char * __fastcall TerrainList::hookTerrain2(int id) {
+	Threads::awaitDataScan();
 	if(terrainList.empty()) rescanTerrains();
 
 	static char buff[MAX_PATH];
@@ -105,13 +110,7 @@ void __stdcall TerrainList::hookWriteMapThumbnail(int a1) {
 	if(flagReseedTerrain) {
 		int *terrainId = (int *) (a1 + 1320);
 		int oldTerrain = *terrainId;
-		int newTerrain = rand() % terrainList.size();
-
-		if((GetAsyncKeyState(VK_CONTROL) & 0x8000) && !customTerrains.empty())
-			newTerrain = maxDefaultTerrain + 1 + (rand() % (customTerrains.size()));
-		else if((GetAsyncKeyState(VK_MENU) & 0x8000))
-			newTerrain = rand() % (maxDefaultTerrain + 1);
-
+		int newTerrain = randomTerrainId();
 		// force map style
 		for(int i=0; i < 8; i++) {
 			if((GetAsyncKeyState(0x31 + i) & 0x8000)) {
@@ -141,6 +140,7 @@ void __stdcall TerrainList::hookWriteMapThumbnail(int a1) {
 
 DWORD (__stdcall *origTerrain3)(int a1, char *a2, char *a3);
 DWORD __stdcall TerrainList::hookTerrain3(int a1, char *a2, char *a3) {
+	Threads::awaitDataScan();
 	if(terrainList.empty()) rescanTerrains();
 //	printf("hookTerrain3: a1: 0x%X a2: %s a3: %s\n", a1, a2, a3);
 	if(!strcmp(a2, "Custom\\"))
@@ -150,7 +150,7 @@ DWORD __stdcall TerrainList::hookTerrain3(int a1, char *a2, char *a3) {
 	auto v6 = (DWORD**)(a1 + 1684);
 	std::string datapath = WaLibc::getWaDataPath();
 
-	for(int i = 0 ; i < terrainList.size(); i++) {
+	for(int i = 0 ; i < terrainListWithoutLegacy.size(); i++) {
 		auto buff = (char*)WaLibc::waMalloc(0x100);
 		char buff2[MAX_PATH];
 		*(v6 - 256) = (DWORD*)buff;
@@ -168,7 +168,7 @@ DWORD __stdcall TerrainList::hookTerrain3(int a1, char *a2, char *a3) {
 			callEditorAddTerrain((DWORD*)(a1 +192), &v7);
 			count++;
 		} else {
-			debugf("Failed to load terrain text.img: %s buff: |%s|\n", terrainList[i].first.c_str(), buff);
+			debugf("Failed to load terrain text.img: %s buff: |%s|\n", terrainListWithoutLegacy[i].first.c_str(), buff);
 			WaLibc::waFree(buff);
 		}
 		v6++;
@@ -200,6 +200,7 @@ void __stdcall TerrainList::callEditorAddTerrain(DWORD * a1, DWORD * a2) {
 
 bool TerrainList::setLastTerrainInfoById(int newTerrain, const char * callposition) {
 	if(callposition) debugf("Call from: %s\n", callposition);
+	Threads::awaitDataScan();
 	if(terrainList.empty()) rescanTerrains();
 	resetLastTerrainInfo(__CALLPOSITION__);
 	if(newTerrain < 0 || newTerrain > terrainList.size()) {
@@ -213,6 +214,7 @@ bool TerrainList::setLastTerrainInfoById(int newTerrain, const char * callpositi
 
 bool TerrainList::setLastTerrainInfoByHash(std::string md5, const char * callposition) {
 	if(callposition) debugf("Call from: %s\n", callposition);
+	Threads::awaitDataScan();
 	if(terrainList.empty()) rescanTerrains();
 	resetLastTerrainInfo(__CALLPOSITION__);
 	auto it = std::find_if(terrainList.begin(), terrainList.end(), [&md5](const std::pair<std::string, std::shared_ptr<TerrainInfo>>& element){ return element.second->hash == md5;});
@@ -238,6 +240,7 @@ void TerrainList::resetLastTerrainInfo(const char * callposition) {
 
 
 void TerrainList::rescanTerrains() {
+	const std::lock_guard<std::mutex> lock(terrainMutex);
 	customTerrains.clear();
 	terrainList.clear();
 	auto wadatapath = WaLibc::getWaDataPath();
@@ -246,43 +249,52 @@ void TerrainList::rescanTerrains() {
 		return;
 	}
 	for(auto & name : standardTerrains) {
-		terrainList.push_back({name, std::shared_ptr<TerrainInfo>(new TerrainInfo{false, name, std::filesystem::path(wadatapath) / "Level" / name, name, false})});
+		auto path = std::filesystem::path(wadatapath) / "Level" / name;
+		bool hasWater = fs::is_regular_file(path / "water.dir");
+		bool hasWaterOverride = fs::is_regular_file(path / "_water.dir");
+		terrainList.push_back({name, std::make_shared<TerrainInfo>(TerrainInfo{false, name, path, name, hasWater, hasWaterOverride,false})});
 	}
 	debugf("Scanning custom terrains\n");
-	for (const auto & entry : fs::recursive_directory_iterator(terrainDir)) {
-		if(!entry.is_regular_file()) continue;
-//		if(entry.depth() > 1) continue;
-		auto filename = entry.path().filename().string();
-		std::transform(filename.begin(), filename.end(), filename.begin(), [](unsigned char c){ return std::tolower(c);});
-		if(filename == "level.dir") {
-			auto parent = entry.path().parent_path();
-			auto dirname = parent.filename().string();
-			auto it = std::find_if(terrainList.begin(), terrainList.end(), [&dirname](const std::pair<std::string, std::shared_ptr<TerrainInfo>>& element){ return element.second->name == dirname;} );
-			if(it == terrainList.end()) {
-				auto id = terrainList.size();
-//				terrainList.push_back(dirname);
-				auto hash = computeTerrainHash(entry.path().parent_path());
-				std::string name = dirname.substr(0, dirname.find(" #", 0));
-				if(name.empty())
-					name = dirname;
-				bool hasWater = false;
-				if(FILE * fw = fopen(std::string(entry.path().parent_path().string() + "/water.dir").c_str(), "rb")) {
-					hasWater = true;
-					fclose(fw);
-				}
-				auto info = std::shared_ptr<TerrainInfo>(new TerrainInfo{true, name, parent, hash, hasWater});
-				customTerrains[hash] = info;
-				terrainList.push_back({name, info});
-				debugf("\t %d (0x%X): %s\n", id, id, info->toString().c_str());
-			}
-		}
-	}
+	scanTerrainDir(Config::getWaDir() / terrainDir, false);
+	scanTerrainDir(Config::getWaDir() / "User/Level", false);
+	terrainListWithoutLegacy = terrainList;
+	scanTerrainDir(Config::getWaDir() / legacyTerrainDir, true);
 	patchTerrain4();
 //	int i =0;
 //	for(auto & entry : terrainList) {
 //		debugf("i: %d entry: %s\n", i, entry.second->toString().c_str());
 //		i++;
 //	}
+}
+
+void TerrainList::scanTerrainDir(std::filesystem::path directory, bool legacy) {
+	if(!fs::is_directory(directory)) {
+		fs::create_directories(directory);
+	}
+
+	for (const auto & entry : fs::recursive_directory_iterator(directory)) {
+		if(!entry.is_regular_file()) continue;
+		auto filename = entry.path().filename().string();
+		std::transform(filename.begin(), filename.end(), filename.begin(), [](unsigned char c){ return tolower(c);});
+		if(filename == "level.dir") {
+			auto parent = entry.path().parent_path();
+			auto dirname = parent.filename().string();
+			auto it = std::find_if(terrainList.begin(), terrainList.end(), [&dirname](const std::pair<std::string, std::shared_ptr<TerrainInfo>>& element){ return element.second->name == dirname;} );
+			if(it == terrainList.end()) {
+				auto id = terrainList.size();
+				auto hash = computeTerrainHash(parent);
+				std::string name = dirname.substr(0, dirname.find(" #", 0));
+				if(name.empty())
+					name = dirname;
+				bool hasWater = fs::is_regular_file(parent / "water.dir");
+				bool hasWaterOverride = fs::is_regular_file(parent / "_water.dir");
+				auto info = std::make_shared<TerrainInfo>(TerrainInfo{true, name, parent, hash, hasWater, hasWaterOverride, legacy});
+				customTerrains[hash] = info;
+				terrainList.push_back({name, info});
+				debugf("\t %d (0x%X): %s\n", id, id, info->toString().c_str());
+			}
+		}
+	}
 }
 
 std::string TerrainList::computeTerrainHash(std::filesystem::path dirname) {
@@ -303,7 +315,7 @@ DWORD addrAddTerrainsOnRebuildWindow;
 void TerrainList::patchTerrain4() {
 	static std::vector<const char*> terrainPtrList;
 	terrainPtrList.clear();
-	for(auto & it : terrainList) {
+	for(auto & it : terrainListWithoutLegacy) {
 		terrainPtrList.push_back(it.first.c_str());
 	}
 	void * ptr = terrainPtrList.data();
@@ -340,9 +352,9 @@ void TerrainList::onLoadReplay(nlohmann::json &json) {
 		std::string thash = json["hash"];
 		if(!thash.empty()) {
 			if(!TerrainList::setLastTerrainInfoByHash(json["hash"], __CALLPOSITION__)) {
-				char buff[2048];
-				_snprintf_s(buff, _TRUNCATE, "This replay file was recorded using a custom terrain which is currently not installed in your WA directory.\nYou will need to obtain the terrain files in order to play this replay.\nSorry about that.\n\nTerrain metadata: %s", json.dump(4).c_str());
-				MessageBoxA(0, buff, Config::getFullStr().c_str(), MB_OK | MB_ICONERROR);
+				if(!json.contains("name")) json["name"] = "???";
+				std::string meta = std::format("This replay file was recorded using a custom terrain which is currently not installed in your WA directory.\nYou will need to obtain the terrain files in order to play this replay.\nSorry about that.\n\nTerrain name: {} hash: {}", json["name"], json["hash"]);
+				MessageBoxA(0, meta.c_str(), Config::getFullStr().c_str(), MB_OK | MB_ICONERROR);
 			}
 		}
 	}
@@ -356,6 +368,7 @@ void TerrainList::onCreateReplay(nlohmann::json & json) {
 
 DWORD addrQuickCPUTerrain_ret;
 int __stdcall TerrainList::hookQuickCPUTerrain_c() {
+	Threads::awaitDataScan();
 	if(terrainList.empty()) rescanTerrains();
 	auto seed = (DWORD*)addrWaSeed;
 	DWORD v4 = *seed;
@@ -365,14 +378,10 @@ int __stdcall TerrainList::hookQuickCPUTerrain_c() {
 	DWORD terrain = v4 % 0x1D;
 
 	if(!Replay::isReplayPlaybackFlag()) {
-		DWORD cterrain = v4 % terrainList.size();
-		if((GetAsyncKeyState(VK_CONTROL) & 0x8000) && !customTerrains.empty())
-			cterrain = maxDefaultTerrain + 1 + (v4 % (customTerrains.size()));
-		else if ((GetAsyncKeyState(VK_MENU) & 0x8000))
-			cterrain = terrain;
-		if(cterrain >= 0x1D && Config::isUseCustomTerrainsInSinglePlayerMode()) {
-			setLastTerrainInfoById(cterrain, __CALLPOSITION__);
-			return cterrain;
+		int newTerrain = randomTerrainId();
+		if(newTerrain >= 0x1D && Config::isUseCustomTerrainsInSinglePlayerMode()) {
+			setLastTerrainInfoById(newTerrain, __CALLPOSITION__);
+			return newTerrain;
 		} else {
 			resetLastTerrainInfo(__CALLPOSITION__);
 			return terrain;
@@ -381,6 +390,22 @@ int __stdcall TerrainList::hookQuickCPUTerrain_c() {
 		if(!lastTerrainInfo || !lastTerrainInfo->custom) {return terrain;}
 		else {return 0xFF;}
 	}
+}
+
+int TerrainList::randomTerrainId() {
+	auto hasCustom = (terrainListWithoutLegacy.size() - 1 - maxDefaultTerrain) > 0;
+	int minId = 0;
+	int maxId = terrainListWithoutLegacy.size() - 1;
+	if((GetAsyncKeyState(VK_CONTROL) & 0x8000) && hasCustom) {
+		minId = maxDefaultTerrain + 1;
+		maxId = terrainListWithoutLegacy.size() - 1;
+	}
+	else if((GetAsyncKeyState(VK_MENU) & 0x8000)) {
+		minId = 0;
+		maxId = maxDefaultTerrain;
+	}
+//	debugf("minId: %d maxId: %d\n", minId, maxId);
+	return (rand() % (maxId + 1 - minId)) + minId;
 }
 
 void __declspec(naked) hookQuickCPUTerrain() {

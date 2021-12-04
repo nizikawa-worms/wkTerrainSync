@@ -16,6 +16,12 @@
 
 class Hooks {
 private:
+	struct PatchInfo {
+		DWORD addr;
+		std::string original;
+		~PatchInfo() {PatchMemData((PVOID)addr, original.size(), (PVOID)original.data(), original.size());}
+	};
+
 	static inline const std::string cacheFile = "wkTerrainSync.cache";
 	static inline std::map<std::string, DWORD> hookNameToAddr;
 	static inline std::map<DWORD, std::string> hookAddrToName;
@@ -23,6 +29,8 @@ private:
 	static inline std::map<std::string, DWORD> scanNameToAddr;
 	static inline std::vector<std::unique_ptr<PLH::x86Detour>> detours;
 	static inline std::vector<std::unique_ptr<PLH::IatHook>> iathooks;
+	static inline std::vector<std::unique_ptr<PatchInfo>> patches;
+
 	static inline bool foundNewOffsets = false;
 
 	//Worms development tools by StepS
@@ -55,6 +63,7 @@ public:
 	static const std::map<std::string, DWORD> &getScanNameToAddr();
 	static void loadOffsets();
 	static void saveOffsets();
+	static void cleanup();
 };
 
 

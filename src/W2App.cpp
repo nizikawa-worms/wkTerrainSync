@@ -46,12 +46,6 @@ DWORD __stdcall W2App::hookConstructGameGlobal(DWORD ddgame) {
 	auto ret = origConstructGameGlobal(ddgame);
 	addrGameGlobal = *(DWORD*)(ddgame + 0x488);
 
-	auto fillcolor = Sprites::getCustomFillColor();
-	if(fillcolor) {
-		Sprites::setCustomFillColor(0);
-		*(DWORD*)(addrGameGlobal + 0x7338) = fillcolor;
-	}
-
 	for(auto & cb : constructGameGlobalCallbacks) {
 		cb(ddgame);
 	}

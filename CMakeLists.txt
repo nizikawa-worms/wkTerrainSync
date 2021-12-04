@@ -38,8 +38,10 @@ add_library(wkTerrainSync SHARED
         src/Scheme.cpp src/Scheme.h
         src/Exports.cpp src/Exports.h
         src/Debugf.h
+        src/Water.cpp src/Water.h
+        src/Threads.cpp src/Threads.h
         ${CMAKE_CURRENT_BINARY_DIR}/resource.rc
-        )
+)
 
 set_property(TARGET wkTerrainSync hacklib PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 

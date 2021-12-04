@@ -16,6 +16,7 @@
 #include "Utils.h"
 #include "Debugf.h"
 #include "Hooks.h"
+#include "Threads.h"
 
 namespace fs = std::filesystem;
 typedef unsigned char byte;
@@ -80,7 +81,7 @@ void Protocol::parseMsgClient(std::string data, DWORD connection) {
 		if(module == Config::getModuleStr()) {
 			if(mType == "TerrainChunk") {handleTerrainChunk(parsed);}
 			else if(mType == "TerrainInfo") {handleTerrainInfo(data, parsed);}
-			else if(mType == "RescanTerrains") {TerrainList::rescanTerrains();}
+			else if(mType == "RescanTerrains") {Threads::awaitDataScan(); TerrainList::rescanTerrains();}
 			else if(mType == "WamChunk") {handleWamChunk(parsed);}
 			else if(mType == "WamReset") {Missions::resetCurrentWam();}
 			else if(mType == "WamAttempt") {Missions::setWamAttemptNumber(parsed["WamAttempt"]);}

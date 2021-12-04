@@ -22,9 +22,12 @@
 #include "Missions.h"
 #include "Debugf.h"
 #include "Hooks.h"
+#include "Water.h"
+#include "Threads.h"
 #include <chrono>
 
 void install() {
+	auto start_hooks = std::chrono::high_resolution_clock::now();
 	srand(time(0) * GetCurrentProcessId());
 	debugf("Detected WA installation directory: %s\n", Config::getWaDir().string().c_str());
 	WaLibc::install();
@@ -41,13 +44,9 @@ void install() {
 	FrontendDialogs::install();
 	Scheme::install();
 	Missions::install();
-
-	debugf("Hooks installed - processing files...\n");
-	Missions::createMissionDirs();
-	Missions::convertMissionFiles();
-	TerrainList::rescanTerrains();
-
-	Config::setModuleInitialized(1);
+	Water::install();
+	debugf("Hooks installed - starting data scan thread\n");
+	Threads::startDataScan();
 }
 
 // Thanks StepS
@@ -82,6 +81,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 			} catch (std::exception &e) {
 				finish = std::chrono::high_resolution_clock::now();
 				MessageBoxA(0, e.what(), Config::getFullStr().c_str(), MB_ICONERROR);
+				Hooks::cleanup();
 			}
 			std::chrono::duration<double> elapsed = finish - start;
 			printf("wkTerrainSync startup took %lf seconds\n", elapsed.count());
@@ -89,7 +89,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 		break;
 		case DLL_THREAD_ATTACH:
 		case DLL_THREAD_DETACH:
+			break;
 		case DLL_PROCESS_DETACH:
+			Hooks::cleanup();
+			Threads::awaitDataScan();
 		default:
 			break;
 	}

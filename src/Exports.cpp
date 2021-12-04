@@ -77,7 +77,7 @@ extern "C" {
 	}
 
 	void __stdcall Replay_registerHasDataToSaveCallback(int(__stdcall * callback)()) {
-
+		Replay::registerHasDataToSaveCallback(callback);
 	}
 
 	//Frontend.cpp

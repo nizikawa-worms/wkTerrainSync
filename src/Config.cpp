@@ -139,6 +139,7 @@ int Config::waVersionCheck() {
 void Config::addVersionInfoToJson(nlohmann::json & json) {
 	json["module"] = getModuleStr();
 	json["version"] = getVersionStr();
+	json["versionInt"] = getVersionInt();
 	json["build"] = getBuildStr();
 	json["protocol"] = getProtocolVersion();
 }
@@ -146,8 +147,13 @@ void Config::addVersionInfoToJson(nlohmann::json & json) {
 std::string Config::getModuleStr() {
 	return "wkTerrainSync";
 }
+
 std::string Config::getVersionStr() {
-	return "v1.2.2";
+	return "v1.2.3";
+}
+
+int Config::getVersionInt() {
+	return 1020300;
 }
 
 std::string Config::getBuildStr() {

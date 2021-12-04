@@ -8,6 +8,7 @@
 #include "Missions.h"
 #include "Utils.h"
 #include "Protocol.h"
+#include "Threads.h"
 
 void (__fastcall *addrLobbySendGreentext)(const char * msg, void * EDX, void* This, int a3, int a4);
 char * addrMyNickname;
@@ -39,7 +40,8 @@ int __fastcall LobbyChat::hookLobbyClientCommands(void *This, void *EDX, char **
 				Protocol::sendVersionQueryToHost();
 			}
 		}
-		else if(args == "rescan") {
+		else if(args == "rescan" || args == "scan") {
+			Threads::awaitDataScan();
 			TerrainList::rescanTerrains();
 			lobbyPrint((char*)"Rescanned terrain list");
 		}
@@ -116,7 +118,7 @@ int __fastcall LobbyChat::hookLobbyHostCommands(void *This, void *EDX, char **co
 
 int (__stdcall *origConstructLobbyHostScreen)(int a1, int a2);
 int __stdcall LobbyChat::hookConstructLobbyHostScreen(int a1, int a2) {
-	Missions::convertMissionFiles();
+	Packets::clearNagStatus();
 	auto ret = origConstructLobbyHostScreen(a1, a2);
 	lobbyHostScreen = a1;
 	return ret;

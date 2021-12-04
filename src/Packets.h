@@ -4,6 +4,7 @@
 
 #include <string>
 #include <vector>
+#include <set>
 
 typedef unsigned long       DWORD;
 class Packets {
@@ -27,6 +28,8 @@ private:
 	static inline std::vector<int(__stdcall *)(DWORD, int, unsigned char *, size_t)> hostPacketHandlerCallbacks;
 	static inline std::vector<int(__stdcall *)(DWORD, unsigned char *, size_t)> hostInternalPacketHandlerCallbacks;
 	static inline std::vector<int(__stdcall *)(DWORD, unsigned char *, size_t)> clientPacketHandlerCallbacks;
+
+	static inline std::set<DWORD> nagStatus;
 public:
 	static void sendDataToClient_connection(DWORD connection, std::string msg);
 	static int sendDataToClient_slot(DWORD slot, std::string msg);
@@ -50,6 +53,7 @@ public:
 	static void registerClientPacketHandlerCallback(int(__stdcall * callback)(DWORD ClientThis, unsigned char * packet, size_t size));
 	static void registerHostInteralPacketHandlerCallback(int(__stdcall * callback)(DWORD Connection, unsigned char * packet, size_t size));
 	static void clientOnTerrainPacket(DWORD This, DWORD EDX, unsigned char * packet, size_t size);
+	static void clearNagStatus();
 };
 
 

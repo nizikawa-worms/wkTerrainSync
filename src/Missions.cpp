@@ -263,6 +263,8 @@ void Missions::readWamFile(fs::path wam) {
 			wamTeamGroupMap.clear();
 			wamAttemptNumber = 0;
 			Scheme::setMissionWscScheme(wam);
+			auto msg = describeCurrentWam(false);
+			Frontend::callMessageBox(msg.c_str(), 0, 0);
 			return;
 		}
 	}
@@ -326,6 +328,8 @@ void Missions::onLoadReplay(nlohmann::json & config) {
 			debugf("Read scheme settings from replay json. Size: 0x%X\n", wamReplayScheme.size());
 		}
 	}
+	cpuClampBug = !config.contains("versionInt") || config["versionInt"] < 1020202;
+	debugf("cpuClampBug: %d\n", cpuClampBug);
 }
 
 bool (__stdcall *origCheckGameEndCondition)();
@@ -427,6 +431,28 @@ _asm hooked:
 	_asm jmp addrReadWamEvents_patch1_ret_hooked
 }
 
+int __stdcall Missions::CTaskCPUSkillClamp_patch_c(int skill) {
+	if(Replay::isReplayPlaybackFlag() && cpuClampBug) {
+		if(skill > 100) return 100;
+	}
+	return skill;
+}
+
+DWORD addrCTaskCPUSkillClamp_patch1_ret;
+void __declspec(naked) Missions::hookCTaskCPUSkillClamp_patch1() {
+	_asm push edi
+	_asm call CTaskCPUSkillClamp_patch_c
+	_asm mov edi, eax
+	_asm jmp addrCTaskCPUSkillClamp_patch1_ret
+}
+
+DWORD addrCTaskCPUSkillClamp_patch2_ret;
+void __declspec(naked) Missions::hookCTaskCPUSkillClamp_patch2() {
+	_asm push eax
+	_asm call CTaskCPUSkillClamp_patch_c
+	_asm jmp addrCTaskCPUSkillClamp_patch2_ret
+}
+
 void Missions::install() {
 //	DWORD addrLoadWAMFile = ScanPatternf("LoadWAMFile", "\x6A\xFF\x64\xA1\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x55\x8B\xAC\x24\x00\x00\x00\x00\x56\x57\xE8\x00\x00\x00\x00\x33\xC9\x85\xC0\x0F\x95\xC1\x85\xC9\x75\x0A", "????????x????xxxx????xx????xxxxx????xxx????xxxxxxxxxxx");
 	DWORD addrFrontendLaunchMission = _ScanPattern("FrontendLaunchMission", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x53\x55\x56\x57\x8B\xE9\x68\x00\x00\x00\x00\xC7\x05\x00\x00\x00\x00\x00\x00\x00\x00", "??????xxx????xx????xxxx????xx????x????xxxxxxx????xx????????");
@@ -442,6 +468,7 @@ void Missions::install() {
 	DWORD addrGetMissionTitle = _ScanPattern("GetMissionTitle", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\x53\x8B\x5C\x24\x18\x56\xC7\x44\x24\x00\x00\x00\x00\x00\x8B\xF1\xC7\x44\x24\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x33\xC9", "???????xx????xxxx????xxxxxxxxxx?????xxxxx?????x????xx");
 	DWORD addrGetMissionDescription = _ScanPattern("GetMissionDescription", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x08\x55\x8B\x6C\x24\x1C\x56\xC7\x44\x24\x00\x00\x00\x00\x00\x8B\xF1\xC7\x44\x24\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00", "???????xx????xxxx????xxxxxxxxxxxx?????xxxxx?????x????");
 	DWORD addrReadWamEvents = _ScanPattern("ReadWamEvents", "\x6A\xFF\x64\xA1\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x83\xEC\x10\x53\x55\x56\x57\x8B\xF1\x33\xDB\x33\xED\xE8\x00\x00\x00\x00\x33\xC9", "????????x????xxxx????xxxxxxxxxxxxxx????xx");
+	DWORD addrConstructCTaskCPU = _ScanPattern("ConstructCTaskCPU", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x8B\x44\x24\x14\x64\x89\x25\x00\x00\x00\x00\x53\x8B\x5C\x24\x1C\x55\x56\x8B\x74\x24\x1C", "???????xx????xxxxxxxx????xxxxxxxxxxx");
 //	addrLoadCPUFlag = ScanPatternf("LoadCPUFlag", "\x69\xC0\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x56\x8D\x34\x08\x0F\xBE\x86\x00\x00\x00\x00\xF7\xD8\x0F\x88\x00\x00\x00\x00\x8D\x48\x13\xB8\x00\x00\x00\x00\xF7\xE9", "??????xx????xxxxxxx????xxxx????xxxx????xx");
 
 	addrLobbyTeamList = *(DWORD*)(addrCopyTeams + 0x1DB);
@@ -475,6 +502,15 @@ void Missions::install() {
 
 	unsigned char teamskill[] = {0x83, 0xF8, 0x7F};
 	_PatchAsm(addrLoadWAMFile + 0x308, (unsigned char*)&teamskill, sizeof(teamskill));
+
+
+	DWORD addrCTaskCPUSkillClamp_patch1 = addrConstructCTaskCPU + 0x85;
+	addrCTaskCPUSkillClamp_patch1_ret = addrConstructCTaskCPU + 0x8F;
+	_HookAsm(addrCTaskCPUSkillClamp_patch1, (DWORD)&hookCTaskCPUSkillClamp_patch1);
+
+	DWORD addrCTaskCPUSkillClamp_patch2 = addrConstructCTaskCPU + 0xA1;
+	addrCTaskCPUSkillClamp_patch2_ret = addrConstructCTaskCPU + 0xAB;
+	_HookAsm(addrCTaskCPUSkillClamp_patch2, (DWORD)&hookCTaskCPUSkillClamp_patch2);
 }
 
 const std::string &Missions::getWamContents() {

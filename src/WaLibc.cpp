@@ -3,6 +3,7 @@
 #include "TerrainList.h"
 #include "Config.h"
 #include "Debugf.h"
+#include "Water.h"
 #include <filesystem>
 
 void *(__cdecl * origWaNew)(size_t size);
@@ -16,20 +17,9 @@ void WaLibc::waFree(void *ptr) {
 }
 
 FILE *__cdecl WaLibc::hookWaFopen(char *Filename, char *Mode) {
-	if(!strcmp(Filename, "data\\Gfx\\Water.dir")) {
-		char buff[MAX_PATH];
-		auto terraininfo = TerrainList::getLastTerrainInfo();
-		if(terraininfo && terraininfo->hasWaterDir && Config::isCustomWaterAllowed()) {
-			_snprintf_s(buff, _TRUNCATE, (terraininfo->dirpath / "water.dir").string().c_str());
-			FILE * pf = fopen(buff, "rb");
-			if(pf) {
-				fclose(pf);
-				debugf("using %s instead of %s\n", buff, Filename);
-				return origWaFopen(buff, Mode);
-			}
-		}
-	}
-	return origWaFopen(Filename, Mode);
+	std::string file = Filename;
+	Water::handleWaFopen(file, Mode);
+	return origWaFopen((char*)file.c_str(), Mode);
 }
 
 int WaLibc::install() {

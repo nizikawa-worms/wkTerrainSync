@@ -161,11 +161,12 @@ void Packets::sendDataToClient_connection(DWORD connection, std::string msg) {
 }
 
 void Packets::sendNagMessage(DWORD connection, const std::string & message) {
-	if(Config::isNagMessageEnabled()) {
+	if(Config::isNagMessageEnabled() && !nagStatus.contains(connection)) {
 		std::string data = {0x00, 0x00};
 		data += message;
 		data += {0x00};
 		origInternalSendPacket(connection, 0, (unsigned char *) data.c_str(), data.size());
+		nagStatus.insert(connection);
 	}
 }
 
@@ -341,4 +342,8 @@ void Packets::registerClientPacketHandlerCallback(int(__stdcall * callback)(DWOR
 
 void Packets::registerHostInteralPacketHandlerCallback(int(__stdcall * callback)(DWORD connection, unsigned char * packet, size_t size)) {
 	hostInternalPacketHandlerCallbacks.push_back(callback);
+}
+
+void Packets::clearNagStatus() {
+	nagStatus.clear();
 }
