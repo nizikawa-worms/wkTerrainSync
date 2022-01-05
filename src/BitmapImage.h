@@ -6,7 +6,8 @@ typedef unsigned long DWORD;
 class BitmapImage {
 private:
 	static BitmapImage * __stdcall hookConstructBitmapImage(int width);
-
+	static BitmapImage * __stdcall hookLoadImgFromDir(int a3);
+	static BitmapImage * __stdcall hookLoadImgFromFile(int a2, char *filename);
 public:
 	int vtable_dword0; // 0x0
 	int unknown4; // 0x4

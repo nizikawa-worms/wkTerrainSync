@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.17)
 project(wkTerrainSync)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 
 add_library(hacklib STATIC
         lib/hacklib/ExeFile.cpp lib/hacklib/ExeFile_WIN32.cpp
@@ -45,4 +45,4 @@ add_library(wkTerrainSync SHARED
 
 set_property(TARGET wkTerrainSync hacklib PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-target_link_libraries(wkTerrainSync hacklib capstone Polyhook_2 version)
+target_link_libraries(wkTerrainSync hacklib capstone Polyhook_2 version libz-static)

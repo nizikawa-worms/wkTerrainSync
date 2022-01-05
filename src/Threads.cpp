@@ -6,13 +6,18 @@
 #include "Config.h"
 
 void Threads::startDataScan() {
-	dataScanThread = std::thread([]{
+	auto task = []{
 		Missions::createMissionDirs();
 		Missions::convertMissionFiles();
 		TerrainList::rescanTerrains();
 		Water::rescanWaterDirs();
 		Config::setModuleInitialized(1);
-	});
+	};
+	if(Config::isScanTerrainsInBackground()) {
+		dataScanThread = std::thread(task);
+	} else {
+		task();
+	}
 }
 
 void Threads::awaitDataScan() {

@@ -52,6 +52,7 @@ void install() {
 // Thanks StepS
 bool LockGlobalInstance(LPCTSTR MutexName)
 {
+	if(!Config::isMutexEnabled()) return true;
 	if (!CreateMutex(NULL, 0, MutexName)) return 0;
 	if (GetLastError() == ERROR_ALREADY_EXISTS) return 0;
 	return 1;

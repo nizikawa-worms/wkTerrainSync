@@ -20,6 +20,7 @@
 #include "Debugf.h"
 #include "Frontend.h"
 #include "Threads.h"
+#include "Base64.h"
 
 
 namespace fs = std::filesystem;
@@ -348,22 +349,68 @@ void __stdcall TerrainList::hookMapTypeChecks() {
 }
 
 void TerrainList::onLoadReplay(nlohmann::json &json) {
-	if(json.contains("hash")) {
-		std::string thash = json["hash"];
+	std::string thash = json.contains("hash") ? json["hash"] : "";
+	std::string name = json.contains("name") ? json["name"] : "???";
+
+	try {
 		if(!thash.empty()) {
 			if(!TerrainList::setLastTerrainInfoByHash(json["hash"], __CALLPOSITION__)) {
-				if(!json.contains("name")) json["name"] = "???";
-				std::string meta = std::format("This replay file was recorded using a custom terrain which is currently not installed in your WA directory.\nYou will need to obtain the terrain files in order to play this replay.\nSorry about that.\n\nTerrain name: {} hash: {}", json["name"], json["hash"]);
-				MessageBoxA(0, meta.c_str(), Config::getFullStr().c_str(), MB_OK | MB_ICONERROR);
+				if(json.contains("TerrainFiles")) {
+					auto & assets = json["TerrainFiles"];
+					if(assets.contains("Level.dir") && assets.contains("Text.img")) {
+						std::string terrainName = name;
+						Utils::stripNonAlphaNum(terrainName);
+						std::string terrainHash = thash;
+						Utils::stripNonAlphaNum(terrainHash);
+						std::filesystem::path outdir = Config::getWaDir() / std::format("{}/{} #{}/", (Config::isExtractTerrainFromReplaysToTmpDir() ? "Data/Level_Replay" : "Data/Level"), terrainName, terrainHash.substr(0, 6));
+						debugf("Installing terrain from replay: %s - %s\n", terrainName.c_str(), outdir.string().c_str());
+						std::filesystem::create_directories(outdir);
+						Utils::decompress_file(assets["Level.dir"], outdir/"Level.dir");
+						Utils::decompress_file(assets["Text.img"], outdir/"Text.img");
+						if(assets.contains("Water.dir")) Utils::decompress_file(assets["Water.dir"], outdir/"Water.dir");
+//						rescanTerrains();
+						auto info = std::make_shared<TerrainInfo>(TerrainInfo{true, name, outdir, thash, assets.contains("Water.dir"), false, false});
+						customTerrains[thash] = info;
+						terrainList.push_back({name, info});
+						terrainListWithoutLegacy.push_back({name, info});
+
+						if(!TerrainList::setLastTerrainInfoByHash(json["hash"], __CALLPOSITION__)) throw std::runtime_error("Failed to install terrain files from replay data");
+					} else {
+						throw std::runtime_error("Replay contains corrupted terrain file data");
+					}
+				}
+				else {
+					throw std::runtime_error("This replay file was recorded using a custom terrain which is currently not installed in your WA directory.\nYou will need to obtain the terrain files in order to play this replay.");
+				}
 			}
 		}
+	} catch(std::exception & e) {
+		std::string meta = std::format("Failed to load custom terrain data.\nTerrain name: {}\nTerrain hash: {}\n\n{}", name, thash, e.what());
+		MessageBoxA(0, meta.c_str(), Config::getFullStr().c_str(), MB_OK | MB_ICONERROR);
 	}
+
+
 }
 
 void TerrainList::onCreateReplay(nlohmann::json & json) {
 	if(!lastTerrainInfo) return;
 	json["name"] = lastTerrainInfo->name;
 	json["hash"] = lastTerrainInfo->hash;
+
+	if(Config::isStoreTerrainFilesInReplay()) {
+		try {
+			auto assets = nlohmann::json();
+			assets["Level.dir"] = macaron::Base64::Encode(Utils::compress_file(lastTerrainInfo->dirpath / "Level.dir"));
+			assets["Text.img"] = macaron::Base64::Encode(Utils::compress_file(lastTerrainInfo->dirpath / "Text.img"));
+			if(lastTerrainInfo->hasWaterDir) {
+				assets["Water.dir"] = macaron::Base64::Encode(Utils::compress_file(lastTerrainInfo->dirpath / "Water.dir"));
+			}
+			json["TerrainFiles"] = assets;
+		} catch(std::exception & e) {
+			debugf("Failed to compress terrain assets: %s\n", e.what());
+		}
+	}
+
 }
 
 DWORD addrQuickCPUTerrain_ret;

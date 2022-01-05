@@ -115,6 +115,7 @@ void Protocol::handleTerrainInfo(const std::string & data, const nlohmann::json 
 				nlohmann::json response;
 				response["type"] = "TerrainRequest";
 				response["terrainHash"] = parsed["hash"];
+				response["compression"] = Config::isUseCompression();
 				Config::addVersionInfoToJson(response);
 				Packets::sendDataToHost(response.dump());
 			}
@@ -150,15 +151,25 @@ void Protocol::handleTerrainRequest(DWORD hostThis, nlohmann::json & parsed, int
 	nlohmann::json metadata;
 	metadata["terrainName"] = terrainInfo->name;
 	metadata["terrainHash"] = terrainInfo->hash;
+	bool compression = parsed.contains("compression") && parsed["compression"];
+
 	Config::addVersionInfoToJson(metadata);
 
 	_snprintf_s(buff, _TRUNCATE, "Sending terrain files (%s) to player: %s", path.string().c_str(), Packets::getNicknameBySlot(slot).c_str());
 	LobbyChat::lobbyPrint(buff);
 
-	sendTerrainFile(slot, path, "text.img", metadata);
-	if(terrainInfo->hasWaterDir)
-		sendTerrainFile(slot, path, "water.dir", metadata);
-	sendTerrainFile(slot, path, "level.dir", metadata);
+	if(!compression) {
+		sendTerrainFileRaw(slot, path, "text.img", metadata);
+		if(terrainInfo->hasWaterDir)
+			sendTerrainFileRaw(slot, path, "water.dir", metadata);
+		sendTerrainFileRaw(slot, path, "level.dir", metadata);
+	} else {
+		sendTerrainFileCompressed(slot, path, "text.img", metadata);
+		if(terrainInfo->hasWaterDir)
+			sendTerrainFileCompressed(slot, path, "water.dir", metadata);
+		sendTerrainFileCompressed(slot, path, "level.dir", metadata);
+	}
+
 
 	nlohmann::json response;
 	response["type"] = "RescanTerrains";
@@ -171,10 +182,9 @@ void Protocol::handleTerrainRequest(DWORD hostThis, nlohmann::json & parsed, int
 }
 
 
-void Protocol::sendTerrainFile(int slot, std::filesystem::path dirpath, std::string filetype, nlohmann::json metadata) {
+void Protocol::sendTerrainFileRaw(int slot, std::filesystem::path dirpath, std::string filetype, nlohmann::json metadata) {
 	auto path = dirpath / filetype;
 	debugf("sending file: %s %s\n", path.string().c_str(), filetype.c_str());
-
 	auto fileSize = fs::file_size(path);
 	std::ifstream in(path, std::ios::binary);
 	if (in.good()) {
@@ -185,6 +195,7 @@ void Protocol::sendTerrainFile(int slot, std::filesystem::path dirpath, std::str
 		metadata["type"] = "TerrainChunk";
 		metadata["fileSize"] = fileSize;
 		metadata["fileType"] = filetype;
+		metadata["compression"] = false;
 
 		auto buf = buffer.str();
 		for (size_t i = 0; i < buf.size(); i += chunkSizeLimit) {
@@ -198,6 +209,38 @@ void Protocol::sendTerrainFile(int slot, std::filesystem::path dirpath, std::str
 		throw std::runtime_error("Failed to read terrain file - disabling upload functionality. File path: " + path.string());
 	}
 }
+
+void Protocol::sendTerrainFileCompressed(int slot, std::filesystem::path dirpath, std::string filetype, nlohmann::json metadata) {
+	auto path = dirpath / filetype;
+	debugf("sending compressed file: %s %s\n", path.string().c_str(), filetype.c_str());
+
+	std::ifstream in(path, std::ios::binary);
+	if (in.good()) {
+		std::stringstream istream;
+		istream << in.rdbuf();
+		in.close();
+		std::string raw = istream.str();
+		std::string buf = Utils::compress_string(raw);
+
+		metadata["type"] = "TerrainChunk";
+		metadata["fileSize"] = buf.size();
+		metadata["fileType"] = filetype;
+		metadata["compression"] = true;
+
+		debugf("compression ratio: %d / %d = %lf%%\n", buf.size(), raw.size(), (double)buf.size() / (double)raw.size() * 100.0);
+
+		for (size_t i = 0; i < buf.size(); i += chunkSizeLimit) {
+			auto part = buf.substr(i, chunkSizeLimit);
+			metadata["chunkOffset"] = i;
+			metadata["chunkData"] = macaron::Base64::Encode(part);
+			Packets::sendDataToClient_slot(slot, metadata.dump());
+		}
+	} else {
+		Config::setUploadAllowed(false);
+		throw std::runtime_error("Failed to read terrain file - disabling upload functionality. File path: " + path.string());
+	}
+}
+
 
 void Protocol::handleTerrainChunk(nlohmann::json & parsed) {
 	if(!Config::isDownloadAllowed())
@@ -219,6 +262,8 @@ void Protocol::handleTerrainChunk(nlohmann::json & parsed) {
 	} else
 		throw std::runtime_error("handleTerrainChunk: Unknown fileType: " + fileType);
 
+	bool compression = parsed.contains("compression") && parsed["compression"];
+
 	size_t fileSize = parsed["fileSize"];
 	if (fileSize > fSizeLimit)
 		throw std::runtime_error("handleTerrainChunk: specified file size: " + std::to_string(fileSize) + " exceeds allowed limit: " + std::to_string(fSizeLimit));
@@ -232,7 +277,7 @@ void Protocol::handleTerrainChunk(nlohmann::json & parsed) {
 	if(chunkOffset > 0 && chunkOffset < magic->size())
 		throw std::runtime_error("handleTerrainChunk: chunkOffset: " + std::to_string(chunkOffset) + " is within magic header check");
 
-	if(chunkOffset == 0) {
+	if(chunkOffset == 0 && !compression) {
 		auto index = chunkData.find(*magic);
 		if(index != 0)
 			throw std::runtime_error("handleTerrainChunk: magic mismatch!");
@@ -273,6 +318,25 @@ void Protocol::handleTerrainChunk(nlohmann::json & parsed) {
 	if(chunkOffset + chunkData.size() == fileSize) {
 		fflush(f);
 		fclose(f);
+
+		if(compression) {
+			debugf("Decompressing file %s\n", pathwithsuffix.c_str());
+			std::ifstream in(pathwithsuffix, std::ios::binary);
+			std::stringstream istream;
+			istream << in.rdbuf();
+			in.close();
+			std::string compressed = istream.str();
+			std::string decompressed = Utils::decompress_string(compressed);
+			debugf("compression ratio: %d / %d = %lf%%\n", compressed.size(), decompressed.size(), (double)compressed.size() / (double)decompressed.size() * 100.0);
+
+			auto index = decompressed.find(*magic);
+			if(index != 0)
+				throw std::runtime_error("handleTerrainChunk: magic mismatch in compressed stream!");
+
+			f = fopen(pathwithsuffix.c_str(), "wb");
+			fwrite(decompressed.data(), decompressed.size(), 1, f);
+			fclose(f);
+		}
 
 		char buff[512];
 		debugf("File download complete. Renaming %s to %s\n", pathwithsuffix.c_str(), path.c_str());

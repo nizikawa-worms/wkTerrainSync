@@ -34,14 +34,16 @@ private:
 	static inline bool useCustomTerrainsInSinglePlayerMode = false;
 	static inline bool useOffsetCache = true;
 	static inline bool replayMsgBox = false;
+	static inline bool useCompression = true;
+	static inline bool scanTerrainsInBackground = true;
+	static inline bool storeTerrainFilesInReplay = true;
+	static inline bool extractTerrainFromReplaysToTmpDir = true;
+	static inline bool useMutex = false;
 
 	static inline std::filesystem::path waDir;
 
 	static inline std::vector<void(__stdcall *)()> moduleInitializedCallbacks;
 	static inline int moduleInitialized;
-
-public:
-	static bool isNagMessageEnabled();
 
 private:
 	static inline int parallaxFrontA;
@@ -51,11 +53,12 @@ private:
 	static inline int parallaxHideOnBigMaps;
 	static inline int thumbnailColor;
 	static inline bool messageBoxEnabled = true;
+	static inline bool debugSpriteImg = false;
+	static inline bool logToFile = false;
 	static inline std::set<std::string> backSprExceptions;
 public:
 	static const std::set<std::string> &getBackSprExceptions();
 
-public:
 	static void readConfig();
 	static bool isModuleEnabled();
 	static bool isDevConsoleEnabled();
@@ -86,6 +89,7 @@ public:
 
 	static bool isGreentextEnabled();
 	static bool isExperimentalMapTypeCheck();
+	static bool isNagMessageEnabled();
 
 	static bool isMessageBoxEnabled();
 	static bool isHexDumpPacketsEnabled();
@@ -107,10 +111,22 @@ public:
 	static bool isDontConvertMissionFiles();
 
 	static bool isUseOffsetCache();
+	static bool isUseCompression();
+	static bool isScanTerrainsInBackground();
+	static bool isStoreTerrainFilesInReplay();
+
+	static bool isExtractTerrainFromReplaysToTmpDir();
+
+	static bool isMutexEnabled();
+	static bool isDebugSpriteImg();
+	static bool isLogToFile();
+	static inline FILE * logfile;
+
 	static std::string getWaVersionAsString();
 
 	static int getModuleInitialized();
 	static void setModuleInitialized(int moduleInitialized);
+
 
 	static void registerModuleInitializedCallback(void(__stdcall * callback)());
 };

@@ -15,6 +15,9 @@ void Config::readConfig() {
 	auto inipath = (waDir / iniFile).string();
 	moduleEnabled = GetPrivateProfileIntA("general", "EnableModule", 1, inipath.c_str());
 	useOffsetCache = GetPrivateProfileIntA("general", "UseOffsetCache", 1, inipath.c_str());
+	useCompression = GetPrivateProfileIntA("general", "UseCompression", 1, inipath.c_str());
+	useMutex = GetPrivateProfileIntA("general", "UseMutex", 0, inipath.c_str());
+	scanTerrainsInBackground = GetPrivateProfileIntA("general", "ScanTerrainsInBackground", 1, inipath.c_str());
 
 	downloadAllowed = GetPrivateProfileIntA("general", "AllowTerrainDownload", 1, inipath.c_str());
 	uploadAllowed = GetPrivateProfileIntA("general", "AllowTerrainUpload", 1, inipath.c_str());
@@ -42,6 +45,14 @@ void Config::readConfig() {
 	devConsoleEnabled = GetPrivateProfileIntA("debug", "EnableDevConsole", 0, inipath.c_str());
 	hexDumpPackets = GetPrivateProfileIntA("debug", "HexDumpPackets", 0, inipath.c_str());
 	replayMsgBox = GetPrivateProfileIntA("debug", "MessageBoxOnReplayLoad", 0, inipath.c_str());
+	debugSpriteImg = GetPrivateProfileIntA("debug", "DebugSpriteImgLoading", 0, inipath.c_str());
+	logToFile = GetPrivateProfileIntA("debug", "LogToFile", 0, inipath.c_str());
+	if(logToFile) {
+		logfile = fopen("wkTerrainSync.log", "w");
+	}
+
+	storeTerrainFilesInReplay = GetPrivateProfileIntA("replay", "StoreTerrainFilesInReplay", 1, inipath.c_str());
+	extractTerrainFromReplaysToTmpDir = GetPrivateProfileIntA("replay", "ExtractTerrainFromReplaysToTmpDir", 1, inipath.c_str());
 
 	superFrontendThumbnailFix = GetPrivateProfileIntA("fixes", "SuperFrontendFixMapThumbnail", 1, inipath.c_str());
 	dontRenameSchemeComboBox = GetPrivateProfileIntA("fixes", "DontRenameSchemeComboBox", 0, inipath.c_str());
@@ -149,11 +160,11 @@ std::string Config::getModuleStr() {
 }
 
 std::string Config::getVersionStr() {
-	return "v1.2.3";
+	return "v1.2.4";
 }
 
 int Config::getVersionInt() {
-	return 1020300;
+	return 1020400;
 }
 
 std::string Config::getBuildStr() {
@@ -291,4 +302,32 @@ std::string Config::getWaVersionAsString() {
 
 bool Config::isReplayMsgBox() {
 	return replayMsgBox;
+}
+
+bool Config::isUseCompression() {
+	return useCompression;
+}
+
+bool Config::isDebugSpriteImg() {
+	return debugSpriteImg;
+}
+
+bool Config::isLogToFile() {
+	return logToFile;
+}
+
+bool Config::isScanTerrainsInBackground() {
+	return scanTerrainsInBackground;
+}
+
+bool Config::isStoreTerrainFilesInReplay() {
+	return storeTerrainFilesInReplay;
+}
+
+bool Config::isMutexEnabled() {
+	return useMutex;
+}
+
+bool Config::isExtractTerrainFromReplaysToTmpDir() {
+	return extractTerrainFromReplaysToTmpDir;
 }

@@ -11,9 +11,10 @@
 
 
 DWORD __fastcall Sprites::hookLoadSpriteFromTerrain(DWORD DDDisplay, DWORD edx, int palette_num_a2, int sprite_id_a3, int vfs_a4, const char *filename) {
-	bool ret = false;
+	if(Config::isDebugSpriteImg()) debugf("Loading sprite: index: %d filename: %s\n", sprite_id_a3, filename);
+	DWORD ret = 0;
 	for(auto & cb : onLoadSpriteFromTerrainCallbacks) {
-		if(cb(DDDisplay, palette_num_a2, sprite_id_a3, vfs_a4, filename)) ret = true;
+		if(cb(DDDisplay, palette_num_a2, sprite_id_a3, vfs_a4, filename)) ret = 1;
 	}
 	if(ret) return 0;
 
@@ -22,21 +23,23 @@ DWORD __fastcall Sprites::hookLoadSpriteFromTerrain(DWORD DDDisplay, DWORD edx, 
 		auto & lastTerrainInfo = TerrainList::getLastTerrainInfo();
 		if(callCheckIfFileExistsInVFS("_back.spr", vfs_a4)) {
 			// custom terrains using extended loader for back.spr should rename the file as "_back.spr".
-			origLoadSpriteFromVFS(DDDisplay, 0, palette_num_a2, sprite_id_a3, 0, vfs_a4, "_back.spr");
+			hookLoadSpriteFromVFS(DDDisplay, 0, palette_num_a2, sprite_id_a3, 0, vfs_a4, "_back.spr");
 		} else if(lastTerrainInfo && backSprExceptions.find(lastTerrainInfo->hash) != backSprExceptions.end()) {
 			// existing custom terrains with custom back.spr are handled by a list of exceptions to maintain compatibility
-			origLoadSpriteFromVFS(DDDisplay, 0, palette_num_a2, sprite_id_a3, 0, vfs_a4, filename);
+			hookLoadSpriteFromVFS(DDDisplay, 0, palette_num_a2, sprite_id_a3, 0, vfs_a4, filename);
 		} else {
 			origLoadSpriteFromTerrain(DDDisplay, 0, palette_num_a2, sprite_id_a3, vfs_a4, filename);
 		}
 		if(Config::isAdditionalParallaxLayersAllowed()) {
-			origLoadSpriteFromVFS(DDDisplay, 0, palette_num_a2, back2SprId, 0, vfs_a4, "back2.spr");
-			origLoadSpriteFromVFS(DDDisplay, 0, palette_num_a2, frontSprId, 0, vfs_a4, "front.spr");
+			hookLoadSpriteFromVFS(DDDisplay, 0, palette_num_a2, back2SprId, 0, vfs_a4, "back2.spr");
+			hookLoadSpriteFromVFS(DDDisplay, 0, palette_num_a2, frontSprId, 0, vfs_a4, "front.spr");
 		}
-		return 1;
+		ret = 1;
 	} else {
-		 return origLoadSpriteFromTerrain(DDDisplay, edx, palette_num_a2, sprite_id_a3, vfs_a4, filename);
+		ret = origLoadSpriteFromTerrain(DDDisplay, edx, palette_num_a2, sprite_id_a3, vfs_a4, filename);
 	}
+	if(Config::isDebugSpriteImg()) debugf("\t%s loading result: %d\n", filename, ret);
+	return ret;
 }
 DWORD overrideSprite(DWORD DD_Display, int palette, int index, int vfs, const char *filename) {
 	char buff[256];
@@ -70,28 +73,30 @@ BitmapImage * overrideImg(DWORD DD_Display, DWORD vfs, const char * filename, in
 }
 
 DWORD __fastcall Sprites::hookLoadSpriteFromVFS(DWORD DD_Display, int EDX, int palette, int index, int a4, int vfs_a5, const char *filename) {
-	bool ret = false;
+	if(Config::isDebugSpriteImg()) debugf("Loading sprite: index: %d filename: %s\n", index, filename);
+	DWORD ret = 0;
 	for(auto & cb : onLoadSpriteFromVFSCallbacks) {
-		if(cb(DD_Display, palette, index, a4, vfs_a5, filename)) ret = true;
+		if(cb(DD_Display, palette, index, a4, vfs_a5, filename)) ret = 1;
 	}
 	if(ret) return 0;
 
 	auto ddgame = W2App::getAddrDdGame();
-	DWORD res = 0;
 	if(ddgame && Config::isSpriteOverrideAllowed()) {
 		DWORD pclandscape = *(DWORD*)(ddgame + 0x4CC);
 		if(pclandscape) {
 			DWORD terrainvfs = *(DWORD*)(pclandscape + 0xB34);
 			if(terrainvfs) {
 				if(strcmp(filename, "debris.spr")) {
-					res = overrideSprite(DD_Display, palette, index, terrainvfs, filename);
+					ret = overrideSprite(DD_Display, palette, index, terrainvfs, filename);
 				}
 			}
 		}
 	}
-	if(!res)
-		return origLoadSpriteFromVFS(DD_Display, EDX, palette, index, a4, vfs_a5, filename);
-	return res;
+	if(!ret) {
+		ret = origLoadSpriteFromVFS(DD_Display, EDX, palette, index, a4, vfs_a5, filename);
+	}
+	if(Config::isDebugSpriteImg()) debugf("\t%s loading result: %d\n", filename, ret);
+	return ret;
 }
 
 int (__fastcall *origDrawBackSprite)(int *a1, int a2, int a3, int a4, int a5, int a6, int sprite_a7, int a8);

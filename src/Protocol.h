@@ -35,7 +35,8 @@ public:
 	static void handleTerrainChunk(nlohmann::json &);
 	static void handleWamChunk(nlohmann::json &);
 
-	static void sendTerrainFile(int slot, std::filesystem::path dirpath, std::string filetype, nlohmann::json metadata);
+	static void sendTerrainFileRaw(int slot, std::filesystem::path dirpath, std::string filetype, nlohmann::json metadata);
+	static void sendTerrainFileCompressed(int slot, std::filesystem::path dirpath, std::string filetype, nlohmann::json metadata);
 	static void sendWam(DWORD connection);
 	static void sendResetWamToAllPlayers();
 
