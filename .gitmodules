@@ -4,3 +4,6 @@
 [submodule "lib/hacklib-patternscanner"]
 	path = lib/hacklib-patternscanner
 	url = https://github.com/nizikawa-worms/hacklib-patternscanner.git
+[submodule "include/nlohmann_json_release"]
+	path = include/nlohmann_json_release
+	url = https://github.com/azadkuh/nlohmann_json_release.git
