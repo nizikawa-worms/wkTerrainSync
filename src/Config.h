@@ -5,11 +5,12 @@
 #include <json.hpp>
 #include <set>
 #include <filesystem>
+#include "version.h"
 
 class Config {
 public:
-	static inline const std::string iniFile = "wkTerrainSync.ini";
-	static inline const std::string moduleName = "wkTerrainSync";
+	static inline const std::string iniFile = PROJECT_NAME ".ini";
+	static inline const std::string moduleName = PROJECT_NAME;
 
 private:
 	static inline bool moduleEnabled = true;
@@ -75,6 +76,7 @@ public:
 	static std::string getBuildStr();
 	static std::string getModuleStr();
 	static std::string getFullStr();
+	static std::string getGitStr();
 	static int getProtocolVersion();
 
 	static int getParallaxFrontA();

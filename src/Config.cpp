@@ -5,7 +5,7 @@
 #include "WaLibc.h"
 #include "Debugf.h"
 #include <filesystem>
-
+#include "git.h"
 namespace fs = std::filesystem;
 
 void Config::readConfig() {
@@ -48,7 +48,7 @@ void Config::readConfig() {
 	debugSpriteImg = GetPrivateProfileIntA("debug", "DebugSpriteImgLoading", 0, inipath.c_str());
 	logToFile = GetPrivateProfileIntA("debug", "LogToFile", 0, inipath.c_str());
 	if(logToFile) {
-		logfile = fopen("wkTerrainSync.log", "w");
+		logfile = fopen(PROJECT_NAME ".log", "w");
 	}
 
 	storeTerrainFilesInReplay = GetPrivateProfileIntA("replay", "StoreTerrainFilesInReplay", 1, inipath.c_str());
@@ -130,12 +130,12 @@ int Config::waVersionCheck() {
 	std::string tversion = getFullStr();
 	char buff[512];
 	if (version < QV(3,8,0,0)) {
-		_snprintf_s(buff, _TRUNCATE, "wkTerrainSync is not compatible with WA versions older than 3.8.0.0.\n\n%s", versionstr);
+		_snprintf_s(buff, _TRUNCATE, PROJECT_NAME " is not compatible with WA versions older than 3.8.0.0.\n\n%s", versionstr);
 		MessageBoxA(0, buff, tversion.c_str(), MB_OK | MB_ICONERROR);
 		return 0;
 	}
-	if (version >= QV(3,9,0,0)) {
-		_snprintf_s(buff, _TRUNCATE, "wkTerrainSync is not compatible with WA versions 3.9.x.x and newer. Besides, this functionality should be built into WA by now...\n\n%s", versionstr);
+	if (version >= QV(3,8,1,1)) {
+		_snprintf_s(buff, _TRUNCATE, PROJECT_NAME " is not compatible with WA versions 3.8.1.1 and newer.\n\n%s", versionstr);
 		MessageBoxA(0, buff, tversion.c_str(), MB_OK | MB_ICONERROR);
 		return 0;
 	}
@@ -143,7 +143,7 @@ int Config::waVersionCheck() {
 		return 1;
 	}
 
-	_snprintf_s(buff, _TRUNCATE, "wkTerrainSync is not designed to work with your WA version and may malfunction.\n\nTo disable this warning set IgnoreVersionCheck=1 in wkTerrainSync.ini file.\n\n%s", versionstr);
+	_snprintf_s(buff, _TRUNCATE, PROJECT_NAME " is not designed to work with your WA version and may malfunction.\n\nTo disable this warning set IgnoreVersionCheck=1 in " PROJECT_NAME ".ini file.\n\n%s", versionstr);
 	return MessageBoxA(0, buff, tversion.c_str(), MB_OKCANCEL | MB_ICONWARNING) == IDOK;
 }
 
@@ -156,15 +156,15 @@ void Config::addVersionInfoToJson(nlohmann::json & json) {
 }
 
 std::string Config::getModuleStr() {
-	return "wkTerrainSync";
+	return PROJECT_NAME;
 }
 
 std::string Config::getVersionStr() {
-	return "v1.2.4";
+	return std::format("v{}.{}.{}.{}", PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR, PROJECT_VERSION_PATCH, PROJECT_VERSION_TWEAK);
 }
 
 int Config::getVersionInt() {
-	return 1020400;
+	return 1000000 * PROJECT_VERSION_MAJOR + 10000 * PROJECT_VERSION_MINOR + 100 * PROJECT_VERSION_PATCH + PROJECT_VERSION_TWEAK;
 }
 
 std::string Config::getBuildStr() {
@@ -172,7 +172,11 @@ std::string Config::getBuildStr() {
 }
 
 std::string Config::getFullStr() {
-	return getModuleStr() + " " + getVersionStr() + " (build: " + getBuildStr() + ")";
+	return std::format("{} {} (build: {} {})", getModuleStr(), getVersionStr(), getBuildStr(), getGitStr());
+}
+
+std::string Config::getGitStr() {
+	return std::format("[{}@{}{}]",  GitMetadata::Branch(), GitMetadata::Describe(), GitMetadata::AnyUncommittedChanges() ? " !!" : "");
 }
 
 int Config::getParallaxFrontA() {

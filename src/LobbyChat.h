@@ -4,6 +4,7 @@
 
 #include <string>
 #include <vector>
+#include "Config.h"
 
 typedef unsigned long       DWORD;
 class LobbyChat {
@@ -43,9 +44,9 @@ private:
 					"\t/mission - show status of currently set mission\n" \
 					"\t/mission attempts 5 - set attempt number of custom mission (used for activation gold/silver/bronze alternative events)\n" \
 					"\t/mission reset - cancel currently loaded mission\n" \
-					"\t/terrains - send your wkTerrainSync version\n" \
-					"\t/terrains list - send your wkTerrainSync version and a list of installed terrains\n" \
-					"\t/terrains query - query wkTerrainSync version used by other players\n" \
+					"\t/terrains - send your " PROJECT_NAME " version\n" \
+					"\t/terrains list - send your " PROJECT_NAME " version and a list of installed terrains\n" \
+					"\t/terrains query - query " PROJECT_NAME " version used by other players\n" \
 					"\t/terrains rescan - rescan terrain directory for new terrains\n" \
 					"\t/scale - show current map scale";
 

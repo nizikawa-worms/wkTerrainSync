@@ -72,7 +72,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 			decltype(start) finish;
 			try {
 				Config::readConfig();
-				if (Config::isModuleEnabled() && Config::waVersionCheck() && LockCurrentInstance("wkTerrainSync")) {
+				if (Config::isModuleEnabled() && Config::waVersionCheck() && LockCurrentInstance(PROJECT_NAME)) {
 					Hooks::loadOffsets();
 					if (Config::isDevConsoleEnabled()) DevConsole::install();
 					install();
@@ -85,7 +85,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 				Hooks::cleanup();
 			}
 			std::chrono::duration<double> elapsed = finish - start;
-			printf("wkTerrainSync startup took %lf seconds\n", elapsed.count());
+			printf(PROJECT_NAME " startup took %lf seconds\n", elapsed.count());
 		}
 		break;
 		case DLL_THREAD_ATTACH:

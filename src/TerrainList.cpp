@@ -21,6 +21,7 @@
 #include "Frontend.h"
 #include "Threads.h"
 #include "Base64.h"
+#include <Windows.h>
 
 
 namespace fs = std::filesystem;
@@ -53,7 +54,7 @@ DWORD __stdcall TerrainList::hookTerrain0(int a1, char *a2, char a3) {
 	if((unsigned int)(v32 + 2) <= 3) {
 		if (Packets::isClient() && (terrainId > maxDefaultTerrain && terrainId != 0xFF)) {
 			char buff[512];
-			_snprintf_s(buff, _TRUNCATE, "Error: Map data contains invalid terrain ID (%d). The host might be using legacy wkTerrain38 which is not compatible with wkTerrainSync", terrainId);
+			_snprintf_s(buff, _TRUNCATE, "Error: Map data contains invalid terrain ID (%d). The host might be using legacy wkTerrain38 which is not compatible with " PROJECT_NAME, terrainId);
 			LobbyChat::lobbyPrint(buff);
 		}
 	}

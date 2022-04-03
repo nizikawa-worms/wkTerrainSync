@@ -61,11 +61,11 @@ void Protocol::parseMsgHost(DWORD hostThis, std::string data, int slot) {
 			if (mType == "TerrainRequest") {handleTerrainRequest(hostThis, parsed, slot);}
 			else if(mType == "VersionQuery") { sendVersionInfoSlot(parsed, slot);}
 			else if(mType == "VersionInfo") { showVersionInfoSlot(parsed, slot);}
-			else throw std::runtime_error("Unknown protocol message type: " + mType + " - if you see this error you probably have an outdated version of wkTerrainSync");
+			else throw std::runtime_error("Unknown protocol message type: " + mType + " - if you see this error you probably have an outdated version of " PROJECT_NAME);
 		}
 	} catch(std::exception & e) {
 		char buff[1024];
-		_snprintf_s(buff, _TRUNCATE, "wkTerrainSync host exception in data from player %s:\n%s", Packets::getNicknameBySlot(slot).c_str(), e.what());
+		_snprintf_s(buff, _TRUNCATE, PROJECT_NAME " host exception in data from player %s:\n%s", Packets::getNicknameBySlot(slot).c_str(), e.what());
 		debugf("parseMsgHost exception: %s\n", e.what());
 		debugf("Received message: |%s|\n", data.c_str());
 		Frontend::callMessageBox(buff, 0, 0);
@@ -87,11 +87,11 @@ void Protocol::parseMsgClient(std::string data, DWORD connection) {
 			else if(mType == "WamAttempt") {Missions::setWamAttemptNumber(parsed["WamAttempt"]);}
 			else if(mType == "VersionQuery") { sendVersionInfoConnection(parsed, connection);}
 			else if(mType == "VersionInfo") { showVersionInfoConnection(parsed, connection);}
-			else throw std::runtime_error("Unknown protocol message type: " + mType + " - if you see this error you probably have an outdated version of wkTerrainSync");
+			else throw std::runtime_error("Unknown protocol message type: " + mType + " - if you see this error you probably have an outdated version of " PROJECT_NAME);
 		}
 	} catch(std::exception & e) {
 		char buff[1024];
-		_snprintf_s(buff, _TRUNCATE, "wkTerrainSync client exception:\n%s", e.what());
+		_snprintf_s(buff, _TRUNCATE, PROJECT_NAME " client exception:\n%s", e.what());
 		debugf("parseMsgClient exception: %s\n", e.what());
 		debugf("Received message: |%s|\n", data.c_str());
 		Frontend::callMessageBox(buff, 0, 0);
