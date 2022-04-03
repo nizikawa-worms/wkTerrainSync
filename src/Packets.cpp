@@ -145,7 +145,7 @@ bool Packets::fixTerrainId(DWORD This, unsigned char *packet, size_t offset) {
 	int terrainId = packet[offset];
 	if(terrainId == 0xFE) {
 		packet[offset] = 0xFD;
-		Frontend::callMessageBox("wkTerrainSync: The map data is invalid. Please generate a new map.", 0, 0);
+		Frontend::callMessageBox(PROJECT_NAME ": The map data is invalid. Please generate a new map.", 0, 0);
 		debugf("TerrainID is 0xFE --- need to regenerate the map.\n");
 	} else if(terrainId >= TerrainList::maxDefaultTerrain) {
 		packet[offset] = 0xFE;
