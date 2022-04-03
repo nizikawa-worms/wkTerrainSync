@@ -24,6 +24,7 @@
 #include "Hooks.h"
 #include "Water.h"
 #include "Threads.h"
+#include "MissionSequences.h"
 #include <chrono>
 
 void install() {
@@ -45,6 +46,7 @@ void install() {
 	Scheme::install();
 	Missions::install();
 	Water::install();
+	MissionSequences::install();
 	debugf("Hooks installed - starting data scan thread\n");
 	Threads::startDataScan();
 }

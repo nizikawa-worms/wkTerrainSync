@@ -9,6 +9,7 @@
 #include "Missions.h"
 #include "Debugf.h"
 #include "Threads.h"
+#include "MissionSequences.h"
 #include <Windows.h>
 
 Replay::ReplayOffsets Replay::extractReplayOffsets(char * replayName) {
@@ -51,6 +52,7 @@ int __stdcall Replay::hookCreateReplay(int a1, const char* a2, __time64_t Time) 
 		return 0;
 	}
 
+	MissionSequences::onCreateReplay_before();
 	auto ret = origCreateReplay(a1, a2, Time);
 
 	char * replayName = (char*)(a1 + 0xDF60);
@@ -81,6 +83,7 @@ int __stdcall Replay::hookCreateReplay(int a1, const char* a2, __time64_t Time) 
 		TerrainList::onCreateReplay(js);
 		MapGenerator::onCreateReplay(js);
 		Missions::onCreateReplay(js);
+		MissionSequences::onCreateReplay_after(js);
 
 		nlohmann::json js2 = nlohmann::json::array({js});
 		std::string data = js2.dump();

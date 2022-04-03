@@ -7,6 +7,7 @@
 #include "FrontendDialogs.h"
 #include "MapGenerator.h"
 #include "Missions.h"
+#include "MissionSequences.h"
 
 DWORD origInitializeW2App;
 DWORD __stdcall W2App::hookInitializeW2App(DWORD DD_Game_a2, DWORD DD_Display_a3, DWORD DS_Sound_a4, DWORD DD_Keyboard_a5, DWORD DD_Mouse_a6, DWORD WAV_CDrom_a7, DWORD WS_GameNet_a8) {
@@ -61,6 +62,7 @@ DWORD __fastcall W2App::hookDestroyGameGlobal(int This, int EDX) {
 	MapGenerator::resetScale(false);
 	Missions::onDestroyGameGlobal();
 	LobbyChat::onDestructGameGlobal();
+	MissionSequences::onDestructGameGlobal();
 
 	for(auto & cb : destroyGameGlobalCallbacks) {
 		cb();
@@ -127,4 +129,12 @@ void W2App::registerConstructGameGlobalCallback(void(__stdcall * callback)(DWORD
 }
 void W2App::registerDestroyGameGlobalCallback(void(__stdcall * callback)()) {
 	destroyGameGlobalCallbacks.push_back(callback);
+}
+
+DWORD W2App::getAddrDdMain() {
+	return addrDDMain;
+}
+
+void W2App::setAddrDdMain(DWORD addrDdMain) {
+	addrDDMain = addrDdMain;
 }

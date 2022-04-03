@@ -9,6 +9,7 @@
 #include "Utils.h"
 #include "Protocol.h"
 #include "Threads.h"
+#include "W2App.h"
 
 void (__fastcall *addrLobbySendGreentext)(const char * msg, void * EDX, void* This, int a3, int a4);
 char * addrMyNickname;
@@ -233,6 +234,9 @@ void LobbyChat::install() {
 	_HookDefault(DestructCWnd);
 	_HookDefault(LobbyDisplayMessage);
 	_HookDefault(ConstructLobbyOfflineScreen);
+
+
+	W2App::setAddrDdMain(*(DWORD*)(addrConstructLobbyHostScreen + 0x3DE));
 }
 
 const std::string &LobbyChat::getTerrainNagMessage() {

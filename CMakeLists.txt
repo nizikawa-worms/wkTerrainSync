@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.17)
 project(wkTerrainSync
-        VERSION "1.2.5.0"
+        VERSION "1.2.5.1"
         DESCRIPTION "wkTerrain with automatic data synchronization and extra features"
         )
 
@@ -51,6 +51,7 @@ add_library(${PROJECT_NAME} SHARED
         src/Debugf.h
         src/Water.cpp src/Water.h
         src/Threads.cpp src/Threads.h
+        src/MissionSequences.cpp src/MissionSequences.h
         ${CMAKE_CURRENT_BINARY_DIR}/resource.rc
 )
 add_dependencies(${PROJECT_NAME} PolyHook_2)
