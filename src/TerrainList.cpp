@@ -21,6 +21,7 @@
 #include "Frontend.h"
 #include "Threads.h"
 #include "Base64.h"
+#include <Windows.h>
 
 
 namespace fs = std::filesystem;

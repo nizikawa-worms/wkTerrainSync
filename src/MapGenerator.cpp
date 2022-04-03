@@ -10,6 +10,7 @@
 #include "LobbyChat.h"
 #include "Missions.h"
 #include "Debugf.h"
+#include <Windows.h>
 
 int (__stdcall *origGenerateMapFromParams)(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11, int a12);
 int __stdcall MapGenerator::hookGenerateMapFromParams(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11, int a12) {

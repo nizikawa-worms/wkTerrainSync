@@ -15,6 +15,7 @@
 #include "CPUflags.h"
 #include "Scheme.h"
 #include "Debugf.h"
+#include <Windows.h>
 
 namespace fs = std::filesystem;
 

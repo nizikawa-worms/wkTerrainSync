@@ -5,7 +5,7 @@
 #include "WaLibc.h"
 #include "Debugf.h"
 #include <filesystem>
-
+#include "git.h"
 namespace fs = std::filesystem;
 
 void Config::readConfig() {
@@ -156,15 +156,15 @@ void Config::addVersionInfoToJson(nlohmann::json & json) {
 }
 
 std::string Config::getModuleStr() {
-	return "wkTerrainSync";
+	return PROJECT_NAME;
 }
 
 std::string Config::getVersionStr() {
-	return "v1.2.4";
+	return std::format("v{}.{}.{}.{}", PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR, PROJECT_VERSION_PATCH, PROJECT_VERSION_TWEAK);
 }
 
 int Config::getVersionInt() {
-	return 1020400;
+	return 1000000 * PROJECT_VERSION_MAJOR + 10000 * PROJECT_VERSION_MINOR + 100 * PROJECT_VERSION_PATCH + PROJECT_VERSION_TWEAK;
 }
 
 std::string Config::getBuildStr() {
@@ -172,7 +172,11 @@ std::string Config::getBuildStr() {
 }
 
 std::string Config::getFullStr() {
-	return getModuleStr() + " " + getVersionStr() + " (build: " + getBuildStr() + ")";
+	return std::format("{} {} (build: {} {})", getModuleStr(), getVersionStr(), getBuildStr(), getGitStr());
+}
+
+std::string Config::getGitStr() {
+	return std::format("[{}@{}{}]",  GitMetadata::Branch(), GitMetadata::Describe(), GitMetadata::AnyUncommittedChanges() ? " !!" : "");
 }
 
 int Config::getParallaxFrontA() {

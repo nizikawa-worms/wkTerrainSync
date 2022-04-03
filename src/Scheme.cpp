@@ -9,6 +9,7 @@
 #include "WaLibc.h"
 #include "Frontend.h"
 #include "Debugf.h"
+#include <Windows.h>
 
 namespace fs = std::filesystem;
 

@@ -9,6 +9,7 @@
 #include "Missions.h"
 #include "Debugf.h"
 #include "Threads.h"
+#include <Windows.h>
 
 Replay::ReplayOffsets Replay::extractReplayOffsets(char * replayName) {
 	ReplayOffsets offsets;
