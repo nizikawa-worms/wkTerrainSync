@@ -460,14 +460,10 @@ BitmapImage *__fastcall MapGenerator::hookGenerateLandscape(BitmapImage *This, i
 
 void MapGenerator::onLoadTextImg(char **pfilename, DWORD vfs) {
 	if(!Config::isBigTextures()) return;
-	for(auto tsize : {2048, 1024, 512}) {
-		static char buff[64];
-		_snprintf_s(buff, _TRUNCATE, "text%d.img", tsize);
-		if(Sprites::callCheckIfFileExistsInVFS(buff, vfs)) {
-			debugf("Replacing terrain's text.img with %s\n", buff);
-			*pfilename = (char *)(&buff);
-			return;
-		}
+	const char * text = "_text.img";
+	if(Sprites::callCheckIfFileExistsInVFS(text, vfs)) {
+		debugf("Overriding text.img with %s\n", text);
+		*pfilename = (char*)text;
 	}
 }
 
