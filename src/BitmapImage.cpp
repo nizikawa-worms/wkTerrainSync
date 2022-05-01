@@ -67,7 +67,10 @@ BitmapImage* __stdcall BitmapImage::hookLoadImgFromDir(int a3) {
 	_asm mov filename, eax
 	_asm mov a2, ecx
 
-	debugf("Loading IMG: %s\n", filename);
+	if(Config::isDebugSpriteImg()) debugf("Loading IMG: %s\n", filename);
+	if(!strcmp(filename, "text.img")) {
+		MapGenerator::onLoadTextImg(&filename, a2);
+	}
 
 	_asm mov eax, filename
 	_asm mov ecx, a2
@@ -75,7 +78,7 @@ BitmapImage* __stdcall BitmapImage::hookLoadImgFromDir(int a3) {
 	_asm call origLoadImgFromDir
 	_asm mov bitmap, eax
 
-	debugf("\t%s loaded at: 0x%X\n", filename, bitmap);
+	if(Config::isDebugSpriteImg()) debugf("\t%s loaded at: 0x%X\n", filename, bitmap);
 
 	return bitmap;
 }
@@ -87,7 +90,7 @@ BitmapImage * __stdcall BitmapImage::hookLoadImgFromFile(int a2, char *filename)
 	BitmapImage * bitmap;
 	_asm mov a1, esi
 
-	debugf("Loading IMG: %s\n", filename);
+	if(Config::isDebugSpriteImg()) debugf("Loading IMG: %s\n", filename);
 
 	_asm push filename
 	_asm push a2
@@ -95,7 +98,7 @@ BitmapImage * __stdcall BitmapImage::hookLoadImgFromFile(int a2, char *filename)
 	_asm call origLoadImgFromFile
 	_asm mov bitmap, eax
 
-	debugf("\t%s loaded at: 0x%X\n", filename, bitmap);
+	if(Config::isDebugSpriteImg()) debugf("\t%s loaded at: 0x%X\n", filename, bitmap);
 
 	return bitmap;
 }
@@ -107,9 +110,9 @@ void BitmapImage::install() {
 
 	_HookDefault(ConstructBitmapImage);
 
-	if(Config::isDebugSpriteImg()) {
-		_HookDefault(LoadImgFromDir);
-		_HookDefault(LoadImgFromFile);
-	}
+//	if(Config::isDebugSpriteImg()) {
+	_HookDefault(LoadImgFromDir);
+	_HookDefault(LoadImgFromFile);
+//	}
 
 }

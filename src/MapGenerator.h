@@ -42,6 +42,10 @@ private:
 	static void hookW2PrvToEditor_patch1();
 	static int __stdcall hookExitMapEditor(int a1);
 
+	static inline BitmapImage * landscapeBitmap, *textBitmap,*soilBitmap  = nullptr;
+	static BitmapImage *__fastcall hookGenerateLandscape(BitmapImage *This, int EDX, int a2, int a3, int a4, int a5, int a6, BitmapImage *text_a7, BitmapImage *soil_a8, BitmapImage *grass_a9, BitmapImage *bridges_a10, int a11, int a12, int a13, int a14, int a15, int a16, int a17, int a18, int a19, int a20, int cavern_a21, int variant_a22);
+	static int __stdcall hookPaintTextImg();
+
 	static inline std::vector<void(__stdcall *)(int)> onMapResetCallbacks;
 	static inline std::vector<void(__stdcall *)()> onMapEditorExitCallbacks;
 public:
@@ -80,6 +84,7 @@ public:
 	static void registerOnMapEditorExitCallback(void(__stdcall * callback)());
 
 	static DWORD getMapThumbnailCWnd();
+	static void onLoadTextImg(char **pfilename, DWORD vfs);
 };
 
 

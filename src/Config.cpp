@@ -24,6 +24,7 @@ void Config::readConfig() {
 	customWaterAllowed = GetPrivateProfileIntA("general", "AllowCustomWater", 1, inipath.c_str());
 	spriteOverrideAllowed = GetPrivateProfileIntA("general", "AllowCustomSprites", 1, inipath.c_str());
 	additionalParallaxLayersAllowed = GetPrivateProfileIntA("general", "AllowAdditionalParallaxLayers", 1, inipath.c_str());
+	bigTextures = GetPrivateProfileIntA("general", "AllowBigTextures", 1, inipath.c_str());
 
 	ignoreVersionCheck = GetPrivateProfileIntA("general", "IgnoreVersionCheck", 0, inipath.c_str());
 
@@ -334,4 +335,8 @@ bool Config::isMutexEnabled() {
 
 bool Config::isExtractTerrainFromReplaysToTmpDir() {
 	return extractTerrainFromReplaysToTmpDir;
+}
+
+bool Config::isBigTextures() {
+	return bigTextures;
 }

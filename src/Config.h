@@ -40,7 +40,8 @@ private:
 	static inline bool storeTerrainFilesInReplay = true;
 	static inline bool extractTerrainFromReplaysToTmpDir = true;
 	static inline bool useMutex = false;
-
+	static inline bool bigTextures = true;
+private:
 	static inline std::filesystem::path waDir;
 
 	static inline std::vector<void(__stdcall *)()> moduleInitializedCallbacks;
@@ -122,6 +123,8 @@ public:
 	static bool isMutexEnabled();
 	static bool isDebugSpriteImg();
 	static bool isLogToFile();
+	static bool isBigTextures();
+
 	static inline FILE * logfile;
 
 	static std::string getWaVersionAsString();

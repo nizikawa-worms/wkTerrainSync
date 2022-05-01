@@ -10,6 +10,7 @@
 #include "LobbyChat.h"
 #include "Missions.h"
 #include "Debugf.h"
+#include "Sprites.h"
 #include <Windows.h>
 
 int (__stdcall *origGenerateMapFromParams)(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11, int a12);
@@ -449,6 +450,58 @@ int __stdcall MapGenerator::hookExitMapEditor(int a1) {
 	return ret;
 }
 
+BitmapImage *(__fastcall *origGenerateLandscape)(BitmapImage *This, int EDX, int a2, int a3, int a4, int a5, int a6, BitmapImage *text_a7, BitmapImage *soil_a8, BitmapImage *grass_a9, BitmapImage *bridges_a10, int a11, int a12, int a13, int a14, int a15, int a16, int a17, int a18, int a19, int a20, int cavern_a21, int variant_a22);
+BitmapImage *__fastcall MapGenerator::hookGenerateLandscape(BitmapImage *This, int EDX, int a2, int a3, int a4, int a5, int a6, BitmapImage *text_a7, BitmapImage *soil_a8, BitmapImage *grass_a9, BitmapImage *bridges_a10, int a11, int a12, int a13, int a14, int a15, int a16, int a17, int a18, int a19, int a20, int cavern_a21, int variant_a22) {
+	landscapeBitmap = This;
+	textBitmap = text_a7;
+	soilBitmap = soil_a8;
+	return 	origGenerateLandscape(This, EDX, a2, a3, a4, a5, a6, text_a7, soil_a8, grass_a9, bridges_a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, cavern_a21, variant_a22);
+}
+
+void MapGenerator::onLoadTextImg(char **pfilename, DWORD vfs) {
+	if(!Config::isBigTextures()) return;
+	for(auto tsize : {2048, 1024, 512}) {
+		static char buff[64];
+		_snprintf_s(buff, _TRUNCATE, "text%d.img", tsize);
+		if(Sprites::callCheckIfFileExistsInVFS(buff, vfs)) {
+			debugf("Replacing terrain's text.img with %s\n", buff);
+			*pfilename = (char *)(&buff);
+			return;
+		}
+	}
+}
+
+int (__stdcall *origPaintTextImg)();
+int __stdcall MapGenerator::hookPaintTextImg() {
+	int map_width = landscapeBitmap->current_width_dword24;
+	int map_height = landscapeBitmap->current_height_dword28;
+	int map_rowsize_diff = landscapeBitmap->rowsize_dword10 - map_width;
+	BYTE * map_data = (BYTE*)landscapeBitmap->data_dword8;
+
+	int text_width = textBitmap->current_width_dword24;
+	int text_rowsize = textBitmap->rowsize_dword10;
+	int text_height = textBitmap->current_height_dword28;
+	BYTE * text_data = (BYTE*)textBitmap->data_dword8;
+	BYTE * text_data_ptr = text_data;
+
+	for(int y=0, ty=0; y < map_height; y++) {
+		BYTE * text_data_row = (BYTE*)(text_data + ty * text_rowsize);
+		text_data_ptr = text_data_row;
+		for(int x=0, tx=0; x < map_width; x++) {
+			if(*map_data)
+				*map_data = *text_data_ptr;
+			map_data++;
+			text_data_ptr++;
+			tx++;
+			if(tx >= text_width) {tx = 0; text_data_ptr = text_data_row;}
+		}
+		ty++;
+		if(ty >= text_height) ty = 0;
+		map_data += map_rowsize_diff;
+	}
+	return map_width;
+}
+
 void MapGenerator::install() {
 	DWORD addrGenerateMapFromParams = _ScanPattern("GenerateMapFromParams", "\x6A\xFF\x64\xA1\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\xB8\x00\x00\x00\x00\x64\x89\x25\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x84\x24\x00\x00\x00\x00\x53\x55\x33\xDB\x3B\xC3\x56\x57\x7D\x09\x89\x9C\x24\x00\x00\x00\x00\xEB\x10", "????????x????xx????xxx????x????xxx????xxxxxxxxxxxxx????xx");
 	DWORD addrSaveRandomMapAsIMG = _ScanPattern("SaveRandomMapAsIMG", "\x6A\xFF\x64\xA1\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x8B\x9C\x24\x00\x00\x00\x00\x55\x33\xED\x3B\xDD\x56\x57\x7D\x04\x33\xDB\xEB\x0A\x83\xFB\x01\x7E\x05", "????????x????xxxx????xx????xxxx????xxxxxxxxxxxxxxxxxx");
@@ -461,6 +514,8 @@ void MapGenerator::install() {
 	DWORD addrCreateBitThumbnail = _ScanPattern("CreateBitThumbnail", "\x55\x8B\xEC\x83\xE4\xF8\x81\xEC\x00\x00\x00\x00\x53\x56\x57\xB0\xA0\x88\x84\x24\x00\x00\x00\x00\x88\x84\x24\x00\x00\x00\x00\xB0\xA1\x88\x84\x24\x00\x00\x00\x00\x88\x84\x24\x00\x00\x00\x00\xB0\xA3", "??????xx????xxxxxxxx????xxx????xxxxx????xxx????xx");
 	DWORD addrW2PrvToEditor = _ScanPattern("W2PrvToEditor", "\x55\x8B\xEC\x83\xE4\xF8\x83\xEC\x24\x53\x8B\x5D\x0C\x56\x8B\xF1\x8B\x8E\x00\x00\x00\x00\x57\x8B\xF8\x8B\x45\x08\x51\x89\x86\x00\x00\x00\x00\x89\x9E\x00\x00\x00\x00\x89\xBE\x00\x00\x00\x00", "??????xxxxxxxxxxxx????xxxxxxxxx????xx????xx????");
 	DWORD addrExitMapEditor = _ScanPattern("ExitMapEditor", "\x55\x8B\xEC\x83\xE4\xF8\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x51\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x53\x8B\x5D\x08\x8B\x83\x00\x00\x00\x00\x56\x57\x50\xE8\x00\x00\x00\x00\x8B\x43\x20\x83\xC4\x04", "??????xxx????xx????xxxx????xx????x????xxxxxx????xxxx????xxxxxx");
+	DWORD addrGenerateLandscape = _ScanPattern("GenerateLandscape", "\x55\x8B\xEC\x83\xE4\xC0\xB8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x53\x8B\x5D\x0C\x83\xFB\x01\x56\x57\x8B\xF9\xC7\x44\x24\x00\x00\x00\x00\x00\x74\x0F\x83\xFB\x03\x7E\x05\x83\xFB\x05\x7E\x05", "??????x????x????xxxxxxxxxxxxxx?????xxxxxxxxxxxx");
+	DWORD addrPaintTextImg = _ScanPattern("PaintTextImg", "\x83\xEC\x08\xA1\x00\x00\x00\x00\x8B\x48\x08\xA1\x00\x00\x00\x00\x8B\x50\x10\x53\x8B\x58\x08\x55\x33\xED\x39\x2D\x00\x00\x00\x00\x89\x4C\x24\x08\x89\x54\x24\x0C\x7E\x66", "????????xxxx????xxxxxxxxxxxx????xxxxxxxxxx");
 
 	_HookDefault(GenerateMapFromParams);
 	_HookDefault(SaveRandomMapAsIMG);
@@ -470,6 +525,8 @@ void MapGenerator::install() {
 	_HookDefault(MapPreviewScaling);
 	_HookDefault(RandomStateHistoryWriter);
 	_HookDefault(ExitMapEditor);
+	_HookDefault(GenerateLandscape);
+	_HookDefault(PaintTextImg);
 
 //	 fix generating 8 thumb%d.dat thumbnails in map editor
 	DWORD addrEditorGenerateMap_patch1 = addrEditorGenerateMapVariant + 0x1A2; //579BE2
