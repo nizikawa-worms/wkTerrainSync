@@ -23,10 +23,8 @@ int __fastcall Packets::hookHostLobbyPacketHandler(DWORD This, DWORD EDX, int sl
 		}
 		if(ret) return 0;
 		Protocol::parseMsgHost(This, std::string((char*)packet, size), slot);
-		return 0;
-	} else {
-		return origHostLobbyPacketHandler(This, 0, slot, packet, size);
 	}
+	return origHostLobbyPacketHandler(This, 0, slot, packet, size);
 }
 
 void (__fastcall *origHostEndscreenPacketHandler)(DWORD This, DWORD EDX, int slot, unsigned char * packet, size_t size);
@@ -42,9 +40,8 @@ void __fastcall Packets::hookHostEndscreenPacketHandler(DWORD This, DWORD EDX, i
 		}
 		if(ret) return;
 		Protocol::parseMsgHost(This, std::string((char*)packet, size), slot);
-	} else {
-		origHostEndscreenPacketHandler(This, 0, slot, packet, size);
 	}
+	origHostEndscreenPacketHandler(This, 0, slot, packet, size);
 }
 
 int (__fastcall *origClientLobbyPacketHandler)(DWORD This, DWORD EDX, unsigned char * packet, size_t size) ;
@@ -60,17 +57,15 @@ int __fastcall Packets::hookClientLobbyPacketHandler(DWORD This, DWORD EDX, unsi
 		}
 		if(ret) return 0;
 		Protocol::parseMsgClient(std::string((char*)packet, size), This);
-		return 0;
-	} else {
-		if(ptype == Protocol::terrainPacketID) {
-			MapGenerator::onTerrainPacket(This, 0, packet, size);
-		}
-		auto ret = origClientLobbyPacketHandler(This, 0, packet, size);
-		if(ptype == Protocol::terrainPacketID) {
-			clientOnTerrainPacket(This, 0, packet, size);
-		}
-		return ret;
 	}
+	if(ptype == Protocol::terrainPacketID) {
+		MapGenerator::onTerrainPacket(This, 0, packet, size);
+	}
+	auto ret = origClientLobbyPacketHandler(This, 0, packet, size);
+	if(ptype == Protocol::terrainPacketID) {
+		clientOnTerrainPacket(This, 0, packet, size);
+	}
+	return ret;
 }
 
 int (__fastcall *origClientEndscreenPacketHandler)(DWORD This, DWORD EDX, unsigned char * packet, size_t size);
@@ -86,17 +81,15 @@ int __fastcall Packets::hookClientEndscreenPacketHandler(DWORD This, DWORD EDX, 
 		}
 		if(ret) return 0;
 		Protocol::parseMsgClient(std::string((char*)packet, size), This);
-		return 0;
-	} else {
-		if(ptype == Protocol::terrainPacketID) {
-			MapGenerator::onTerrainPacket(This, 0, packet, size);
-		}
-		auto ret = origClientEndscreenPacketHandler(This, 0, packet, size);
-		if(ptype == Protocol::terrainPacketID) {
-			clientOnTerrainPacket(This, 0, packet, size);
-		}
-		return ret;
 	}
+	if(ptype == Protocol::terrainPacketID) {
+		MapGenerator::onTerrainPacket(This, 0, packet, size);
+	}
+	auto ret = origClientEndscreenPacketHandler(This, 0, packet, size);
+	if(ptype == Protocol::terrainPacketID) {
+		clientOnTerrainPacket(This, 0, packet, size);
+	}
+	return ret;
 }
 
 int (__fastcall *origInternalSendPacket)(DWORD This, DWORD EDX, unsigned char * packet, size_t size);
