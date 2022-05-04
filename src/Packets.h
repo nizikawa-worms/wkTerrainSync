@@ -8,8 +8,6 @@
 
 typedef unsigned long       DWORD;
 class Packets {
-public:
-	static const int numSlots = 6;
 private:
 	static inline DWORD addrClientSlot;
 	static inline DWORD addrHostSlot;
@@ -31,6 +29,7 @@ private:
 	static inline std::vector<int(__stdcall *)(DWORD, unsigned char *, size_t)> clientPacketHandlerCallbacks;
 
 	static inline std::set<DWORD> nagStatus;
+	static inline DWORD addrHostIncomingConnection;
 public:
 	static void sendDataToClient_connection(DWORD connection, std::string msg);
 	static int sendDataToClient_slot(DWORD slot, std::string msg);
@@ -55,6 +54,7 @@ public:
 	static void registerHostInteralPacketHandlerCallback(int(__stdcall * callback)(DWORD Connection, unsigned char * packet, size_t size));
 	static void clientOnTerrainPacket(DWORD This, DWORD EDX, unsigned char * packet, size_t size);
 	static void clearNagStatus();
+	static int getNumSlots();
 };
 
 

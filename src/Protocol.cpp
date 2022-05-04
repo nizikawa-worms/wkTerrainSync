@@ -422,7 +422,7 @@ void Protocol::sendResetWamToAllPlayers() {
 	json["type"] = "WamReset";
 	Config::addVersionInfoToJson(json);
 	std::string dump = json.dump();
-	for(int i=0; i < Packets::numSlots; i++) {
+	for(int i=0; i < Packets::getNumSlots(); i++) {
 		Packets::sendDataToClient_slot(i, dump);
 	}
 }
@@ -438,7 +438,7 @@ void Protocol::sendWamAttemptsToAllPlayers(int attempts) {
 	json["WamAttempt"] = attempts;
 	Config::addVersionInfoToJson(json);
 	std::string dump = json.dump();
-	for(int i=0; i < Packets::numSlots; i++) {
+	for(int i=0; i < Packets::getNumSlots(); i++) {
 		Packets::sendDataToClient_slot(i, dump);
 	}
 }
@@ -480,7 +480,7 @@ void Protocol::sendVersionQueryToAllPlayers() {
 	json["type"] = "VersionQuery";
 	Config::addVersionInfoToJson(json);
 	std::string dump = json.dump();
-	for(int i=0; i < Packets::numSlots; i++) {
+	for(int i=0; i < Packets::getNumSlots(); i++) {
 		Packets::sendDataToClient_slot(i, dump);
 	}
 }
