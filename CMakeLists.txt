@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.17)
 project(wkTerrainSync
-        VERSION "1.2.5.2"
+        VERSION "1.2.6.0"
         DESCRIPTION "wkTerrain with automatic data synchronization and extra features"
         )
 
