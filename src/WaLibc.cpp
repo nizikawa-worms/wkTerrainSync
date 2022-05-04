@@ -4,6 +4,7 @@
 #include "Config.h"
 #include "Debugf.h"
 #include "Water.h"
+#include "Threads.h"
 #include <filesystem>
 
 void *(__cdecl * origWaNew)(size_t size);
@@ -22,6 +23,14 @@ FILE *__cdecl WaLibc::hookWaFopen(char *Filename, char *Mode) {
 	return origWaFopen((char*)file.c_str(), Mode);
 }
 
+int (__stdcall *origFindCdDrive)();
+int __stdcall hookFindCdDrive() {
+	int ret = origFindCdDrive();
+	debugf("Starting data scan...\n");
+	Threads::startDataScan();
+	return ret;
+}
+
 int WaLibc::install() {
 	DWORD addrWaMallocMemset = _ScanPattern("WaMallocMemset", "\x8D\x47\x03\x83\xE0\xFC\x83\xC0\x20\x56\x50\xE8\x00\x00\x00\x00\x57\x8B\xF0\x6A\x00\x56\xE8\x00\x00\x00\x00\x83\xC4\x10\x8B\xC6\x5E\xC3", "??????xxxxxx????xxxxxxx????xxxxxxx");
 	origWaNew = (void *(__cdecl *)(size_t)) (addrWaMallocMemset + 0x10 +  *(DWORD*)(addrWaMallocMemset +  0xC)); //5C0377
@@ -30,6 +39,7 @@ int WaLibc::install() {
 	addrDriveLetter = *(char**)(addrGetDataPath + 0x69);
 	addrSteamFlag = *(char**)(addrGetDataPath + 0x56);
 	debugf("addrDriveLetter: 0x%X addrSteamFlag: 0x%X\n", addrDriveLetter, addrSteamFlag);
+	DWORD addrFindCdDrive = _ScanPattern("FindCdDrive", "\xA0\x00\x00\x00\x00\x83\xEC\x0C\x84\xC0\x0F\x85\x00\x00\x00\x00\x53\x55\x33\xDB\x33\xED\xC6\x05\x00\x00\x00\x00\x00\xFF\x15\x00\x00\x00\x00\x8B\xD0\x85\xD2\x89\x54\x24\x10\x75\x06\x5D\x5B\x83\xC4\x0C", "??????xxxxxx????xxxxxxxx?????xx????xxxxxxxxxxxxxxx");
 
 	DWORD addrWaFopenRef = _ScanPattern("WaFopenRef", "\x81\xEC\x00\x00\x00\x00\x68\x00\x00\x00\x00\x50\xE8\x00\x00\x00\x00\x83\xC4\x08\x85\xC0\x89\x44\x24\x14\x0F\x84\x00\x00\x00\x00\x0F\xB7\x06", "??????x????xx????xxxxxxxxxxx????xxx");
 	DWORD addrWaFopen = *(DWORD*)(addrWaFopenRef + 0xD) + addrWaFopenRef + 0x11;
@@ -54,6 +64,7 @@ int WaLibc::install() {
 		_ScanPattern("WaFclose", "\x6A\x0C\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x83\x4D\xE4\xFF\x33\xC0\x8B\x75\x08\x33\xFF\x3B\xF7\x0F\x95\xC0\x3B\xC7\x75\x1D\xE8\x00\x00\x00\x00\xC7\x00\x00\x00\x00\x00", "???????x????xxxxxxxxxxxxxxxxxxxxx????xx????");
 
 	_HookDefault(WaFopen);
+	_HookDefault(FindCdDrive);
 	return 0;
 }
 

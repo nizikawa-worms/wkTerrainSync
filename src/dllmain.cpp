@@ -47,8 +47,7 @@ void install() {
 	Missions::install();
 	Water::install();
 	MissionSequences::install();
-	debugf("Hooks installed - starting data scan thread\n");
-	Threads::startDataScan();
+	debugf("Hooks installed\n");
 }
 
 // Thanks StepS
