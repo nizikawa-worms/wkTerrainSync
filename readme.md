@@ -1,4 +1,4 @@
-# wkTerrainSync v.1.2.5.0
+# wkTerrainSync v.1.2.5.2
 _Worms Armageddon WormKit module that allows additional W:A terrains to be installed, selected in the Map editor and played online. In addition, the module allows for custom-sized maps to be generated with built-in map generator and custom .WAM missions to be played in both offline and online multiplayer games.
 It superseded wkTerrain by introducing means of automatic terrain data synchronization, file transfers, more visual customization features and new gameplay features._
 
