@@ -26,8 +26,9 @@ public:
 		bool hasWaterDir;
 		bool hasWaterDirOverride;
 		bool legacy;
+		nlohmann::json terrainJson;
 		std::string toString() const {
-			return std::format("Name: {} Dirpath: |{}| Hash: {} {} {} {}", name, dirpath.string(), hash, hasWaterDir ? "(custom water.dir)" : "",  hasWaterDirOverride ? "(override _water.dir)" : "", legacy ? "(legacy)" : "");
+			return std::format("Name: {} Dirpath: |{}| Hash: {} {} {} {} {}", name, dirpath.string(), hash, hasWaterDir ? "(custom water.dir)" : "",  hasWaterDirOverride ? "(override _water.dir)" : "", legacy ? "(legacy)" : "", !terrainJson.empty() ? "(terrain.json)" : "");
 		}
 	};
 	static const int maxDefaultTerrain = 0x1C;
@@ -65,6 +66,7 @@ private:
 	static char* __stdcall hookGetMapEditorTerrainPath();
 
 	static void scanTerrainDir(std::filesystem::path directory, bool legacy);
+	static nlohmann::json readTerrainJson(std::filesystem::path leveldir);
 public:
 	static void rescanTerrains();
 	static void install();
@@ -78,7 +80,6 @@ public:
 	static const std::shared_ptr<TerrainInfo> &getLastTerrainInfo();
 	static const std::map<std::string, std::shared_ptr<TerrainInfo>> &getCustomTerrains();
 	static const std::vector<std::pair<std::string, std::shared_ptr<TerrainInfo>>> &getTerrainList();
-
 	static int randomTerrainId();
 };
 

@@ -21,6 +21,7 @@
 #include "Frontend.h"
 #include "Threads.h"
 #include "Base64.h"
+#include "VFS.h"
 #include <Windows.h>
 
 
@@ -62,7 +63,6 @@ DWORD __stdcall TerrainList::hookTerrain0(int a1, char *a2, char a3) {
 		   && (terrainId <= maxId || (terrainId == 0xFF && lastTerrainInfo) || (Replay::isReplayPlaybackFlag() && lastTerrainInfo))
 		   && *(DWORD *)(a1 + 1352) <= 0x12Cu
 		   && (v32 < 0 || !*(DWORD *)(a1 + 1324));
-	debugf("return: %d\n", ret);
 	return ret;
 }
 
@@ -254,7 +254,7 @@ void TerrainList::rescanTerrains() {
 		auto path = std::filesystem::path(wadatapath) / "Level" / name;
 		bool hasWater = fs::is_regular_file(path / "water.dir");
 		bool hasWaterOverride = fs::is_regular_file(path / "_water.dir");
-		terrainList.push_back({name, std::make_shared<TerrainInfo>(TerrainInfo{false, name, path, name, hasWater, hasWaterOverride,false})});
+		terrainList.push_back({name, std::make_shared<TerrainInfo>(TerrainInfo{false, name, path, name, hasWater, hasWaterOverride,false, {}})});
 	}
 	debugf("Scanning custom terrains\n");
 	scanTerrainDir(Config::getWaDir() / terrainDir, false);
@@ -290,7 +290,7 @@ void TerrainList::scanTerrainDir(std::filesystem::path directory, bool legacy) {
 					name = dirname;
 				bool hasWater = fs::is_regular_file(parent / "water.dir");
 				bool hasWaterOverride = fs::is_regular_file(parent / "_water.dir");
-				auto info = std::make_shared<TerrainInfo>(TerrainInfo{true, name, parent, hash, hasWater, hasWaterOverride, legacy});
+				auto info = std::make_shared<TerrainInfo>(TerrainInfo{true, name, parent, hash, hasWater, hasWaterOverride, legacy, std::move(readTerrainJson(parent / "level.dir"))});
 				customTerrains[hash] = info;
 				terrainList.push_back({name, info});
 				debugf("\t %d (0x%X): %s\n", id, id, info->toString().c_str());
@@ -483,6 +483,17 @@ char *(__fastcall *origSetBuiltinMap)(void *mapname, DWORD a2);
 char *__fastcall hookSetBuiltinMap(void *mapname, DWORD a2) {
 	TerrainList::resetLastTerrainInfo(__CALLPOSITION__);
 	return origSetBuiltinMap(mapname, a2);
+}
+
+nlohmann::json TerrainList::readTerrainJson(std::filesystem::path leveldir) {
+	VFS vfs(leveldir);
+	std::string data = std::move(vfs.readFile("terrain.json"));
+	if(data.empty()) return {};
+	try {
+		return nlohmann::json::parse(data);
+	} catch(std::exception & e) {
+		throw std::runtime_error(std::format("Failed to parse terrain.json in {}, error: {}", leveldir.string(), e.what()));
+	}
 }
 
 void TerrainList::install(){

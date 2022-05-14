@@ -37,10 +37,6 @@ void Config::readConfig() {
 	printMapScaleInChat = GetPrivateProfileIntA("general", "PrintMapScaleInChat", 1, inipath.c_str());
 	useCustomTerrainsInSinglePlayerMode = GetPrivateProfileIntA("general", "UseCustomTerrainsInSinglePlayerMode", 1, inipath.c_str());
 
-	parallaxBackA = GetPrivateProfileIntA("parallax", "parallaxBackA", 9011200, inipath.c_str());
-	parallaxBackB = GetPrivateProfileIntA("parallax", "parallaxBackB", 42172416, inipath.c_str());
-	parallaxFrontA = GetPrivateProfileIntA("parallax", "parallaxFrontA", 65536, inipath.c_str());
-	parallaxFrontB = GetPrivateProfileIntA("parallax", "parallaxFrontB", 48003809, inipath.c_str());
 	parallaxHideOnBigMaps = GetPrivateProfileIntA("parallax", "HideOnBigMaps", 1, inipath.c_str());
 
 	devConsoleEnabled = GetPrivateProfileIntA("debug", "EnableDevConsole", 0, inipath.c_str());
@@ -178,22 +174,6 @@ std::string Config::getFullStr() {
 
 std::string Config::getGitStr() {
 	return std::format("[{}@{}{}]",  GitMetadata::Branch(), GitMetadata::Describe(), GitMetadata::AnyUncommittedChanges() ? " !!" : "");
-}
-
-int Config::getParallaxFrontA() {
-	return parallaxFrontA;
-}
-
-int Config::getParallaxFrontB() {
-	return parallaxFrontB;
-}
-
-int Config::getParallaxBackA() {
-	return parallaxBackA;
-}
-
-int Config::getParallaxBackB() {
-	return parallaxBackB;
 }
 
 bool Config::isGreentextEnabled() {

@@ -52,8 +52,8 @@ add_library(${PROJECT_NAME} SHARED
         src/Water.cpp src/Water.h
         src/Threads.cpp src/Threads.h
         src/MissionSequences.cpp src/MissionSequences.h
-        ${CMAKE_CURRENT_BINARY_DIR}/resource.rc
-)
+        src/VFS.cpp src/VFS.h
+        ${CMAKE_CURRENT_BINARY_DIR}/resource.rc)
 add_dependencies(${PROJECT_NAME} PolyHook_2)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)

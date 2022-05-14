@@ -25,6 +25,7 @@
 #include "Water.h"
 #include "Threads.h"
 #include "MissionSequences.h"
+#include "VFS.h"
 #include <chrono>
 
 void install() {
@@ -47,6 +48,7 @@ void install() {
 	Missions::install();
 	Water::install();
 	MissionSequences::install();
+	VFS::install();
 	debugf("Hooks installed\n");
 }
 

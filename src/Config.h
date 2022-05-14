@@ -48,10 +48,6 @@ private:
 	static inline int moduleInitialized;
 
 private:
-	static inline int parallaxFrontA;
-	static inline int parallaxFrontB;
-	static inline int parallaxBackA;
-	static inline int parallaxBackB;
 	static inline int parallaxHideOnBigMaps;
 	static inline int thumbnailColor;
 	static inline bool messageBoxEnabled = true;
@@ -80,10 +76,6 @@ public:
 	static std::string getGitStr();
 	static int getProtocolVersion();
 
-	static int getParallaxFrontA();
-	static int getParallaxFrontB();
-	static int getParallaxBackA();
-	static int getParallaxBackB();
 	static int getParallaxHideOnBigMaps();
 
 	static int getThumbnailColor();

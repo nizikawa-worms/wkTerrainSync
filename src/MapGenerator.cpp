@@ -11,6 +11,7 @@
 #include "Missions.h"
 #include "Debugf.h"
 #include "Sprites.h"
+#include "VFS.h"
 #include <Windows.h>
 
 int (__stdcall *origGenerateMapFromParams)(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10, int a11, int a12);
@@ -460,8 +461,8 @@ BitmapImage *__fastcall MapGenerator::hookGenerateLandscape(BitmapImage *This, i
 
 void MapGenerator::onLoadTextImg(char **pfilename, DWORD vfs) {
 	if(!Config::isBigTextures()) return;
-	const char * text = "_text.img";
-	if(Sprites::callCheckIfFileExistsInVFS(text, vfs)) {
+	const char * text = "text2.img";
+	if(VFS::callCheckIfFileExistsInVFS(text, vfs)) {
 		debugf("Overriding text.img with %s\n", text);
 		*pfilename = (char*)text;
 	}

@@ -50,6 +50,7 @@ DWORD __stdcall W2App::hookConstructGameGlobal(DWORD ddgame) {
 	for(auto & cb : constructGameGlobalCallbacks) {
 		cb(ddgame);
 	}
+	Sprites::onConstructGameGlobal();
 
 	return ret;
 }
@@ -63,6 +64,7 @@ DWORD __fastcall W2App::hookDestroyGameGlobal(int This, int EDX) {
 	Missions::onDestroyGameGlobal();
 	LobbyChat::onDestructGameGlobal();
 	MissionSequences::onDestructGameGlobal();
+	Sprites::onDestructGameGlobal();
 
 	for(auto & cb : destroyGameGlobalCallbacks) {
 		cb();

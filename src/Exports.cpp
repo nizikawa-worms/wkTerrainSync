@@ -10,6 +10,7 @@
 #include "Scheme.h"
 #include "MapGenerator.h"
 #include "Sprites.h"
+#include "VFS.h"
 
 extern "C" {
 
@@ -231,7 +232,7 @@ extern "C" {
 
 	//Sprites.cpp
 	int __stdcall Sprites_checkIfFileExistsInVFS(const char * filename, DWORD vfs) {
-		return Sprites::callCheckIfFileExistsInVFS(filename, vfs);
+		return VFS::callCheckIfFileExistsInVFS(filename, vfs);
 	}
 
 	DWORD __stdcall Sprites_loadSpriteFromVFS(DWORD DD_Display, int palette, int index, int a4, DWORD vfs, const char *filename) {
