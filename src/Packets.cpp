@@ -23,11 +23,8 @@ int __fastcall Packets::hookHostLobbyPacketHandler(DWORD This, DWORD EDX, int sl
 		}
 		if(ret) return 0;
 		Protocol::parseMsgHost(This, std::string((char*)packet, size), slot);
-		magicPacketHandledFlag = true;
 	}
-	int ret = origHostLobbyPacketHandler(This, 0, slot, packet, size);
-	magicPacketHandledFlag = false;
-	return ret;
+	return origHostLobbyPacketHandler(This, 0, slot, packet, size);
 }
 
 void (__fastcall *origHostEndscreenPacketHandler)(DWORD This, DWORD EDX, int slot, unsigned char * packet, size_t size);
@@ -36,7 +33,7 @@ void __fastcall Packets::hookHostEndscreenPacketHandler(DWORD This, DWORD EDX, i
 		Utils::hexDump("HostEndscreenPacketHandler", packet, size);
 	}
 	auto ptype = *(unsigned short int*) packet;
-	if(ptype == Protocol::magicPacketID && !magicPacketHandledFlag) {
+	if(ptype == Protocol::magicPacketID) {
 		bool ret = false;
 		for(auto & cb : hostPacketHandlerCallbacks) {
 			if(cb(This, slot, packet, size)) ret = true;

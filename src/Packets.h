@@ -14,7 +14,6 @@ private:
 	static inline DWORD addrHostUnicast;
 	static inline DWORD addrSendMapData;
 	static inline bool internalFlag = false;
-	static inline bool magicPacketHandledFlag = false;
 
 	static int __fastcall hookHostLobbyPacketHandler(DWORD This, DWORD EDX, int slot, unsigned char * packet, size_t size);
 	static void __fastcall hookHostEndscreenPacketHandler(DWORD This, DWORD EDX, int slot, unsigned char * packet, size_t size);
