@@ -460,7 +460,7 @@ BitmapImage *__fastcall MapGenerator::hookGenerateLandscape(BitmapImage *This, i
 
 void MapGenerator::onLoadTextImg(char **pfilename, DWORD vfs) {
 	if(!Config::isBigTextures()) return;
-	const char * text = "_text.img";
+	const char * text = "text2.img";
 	if(Sprites::callCheckIfFileExistsInVFS(text, vfs)) {
 		debugf("Overriding text.img with %s\n", text);
 		*pfilename = (char*)text;
@@ -469,6 +469,11 @@ void MapGenerator::onLoadTextImg(char **pfilename, DWORD vfs) {
 
 int (__stdcall *origPaintTextImg)();
 int __stdcall MapGenerator::hookPaintTextImg() {
+	if(textBitmap->current_width_dword24 == 256 && textBitmap->current_height_dword28 == 256) {
+		debugf("Using original text.img painting logic\n");
+		return origPaintTextImg();
+	}
+	debugf("Using custom text.img painting logic\n");
 	int map_width = landscapeBitmap->current_width_dword24;
 	int map_height = landscapeBitmap->current_height_dword28;
 	int map_rowsize_diff = landscapeBitmap->rowsize_dword10 - map_width;
